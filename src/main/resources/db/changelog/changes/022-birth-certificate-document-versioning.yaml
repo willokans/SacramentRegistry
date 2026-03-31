@@ -2,6 +2,8 @@ databaseChangeLog:
   - changeSet:
       id: 1
       author: will_okanumeh
+      validCheckSum:
+        - 9:e21a09b0edfd59376f93b0a76500b7a5
       changes:
         - sql:
             sql: |
