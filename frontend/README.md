@@ -37,6 +37,7 @@ Set these environment variables in staging/production:
 
 - `NEXT_PUBLIC_SENTRY_DSN` (browser SDK)
 - `NEXT_PUBLIC_SENTRY_ENVIRONMENT` (`staging`, `production`, etc. for browser events)
+- `NEXT_PUBLIC_SENTRY_RELEASE` (release identifier for browser events, usually Git SHA)
 - `SENTRY_DSN` (server/edge SDK, can match public DSN)
 - `SENTRY_ENVIRONMENT` (`staging`, `production`, etc.)
 - `SENTRY_RELEASE` (for example, the Git SHA used for deploy)
