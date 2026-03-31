@@ -1,12 +1,14 @@
 package com.wyloks.churchRegistry.web;
 
 import com.wyloks.churchRegistry.dto.BaptismResponse;
+import com.wyloks.churchRegistry.dto.BaptismDocumentVersionResponse;
 import com.wyloks.churchRegistry.entity.SacramentAuditLog.SacramentType;
 import com.wyloks.churchRegistry.repository.BaptismRepository;
 import com.wyloks.churchRegistry.repository.FirstHolyCommunionRepository;
 import com.wyloks.churchRegistry.repository.MarriagePartyLegacyRepository;
 import com.wyloks.churchRegistry.security.SacramentAuthorizationService;
 import com.wyloks.churchRegistry.service.BaptismService;
+import com.wyloks.churchRegistry.service.BirthCertificateService;
 import com.wyloks.churchRegistry.service.RemoteFileService;
 import com.wyloks.churchRegistry.service.SacramentAuditService;
 
@@ -23,6 +25,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Optional;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -46,6 +49,9 @@ class CertificateControllerTest {
 
     @MockBean
     BaptismService baptismService;
+
+    @MockBean
+    BirthCertificateService birthCertificateService;
 
     @MockBean
     BaptismRepository baptismRepository;
@@ -131,5 +137,47 @@ class CertificateControllerTest {
 
         verify(remoteFileService, never()).upload(anyString(), anyString(), any(), anyString());
         verify(baptismService, never()).attachExternalCertificate(any(), anyString());
+    }
+
+    @Test
+    void uploadBirthCertificate_returns200AndCreatedVersion() throws Exception {
+        when(authorizationService.findBaptismParishId(1L)).thenReturn(Optional.of(10L));
+        doNothing().when(authorizationService).requireWriteAccessForParish(10L);
+        when(birthCertificateService.upload(eq(1L), any())).thenReturn(BaptismDocumentVersionResponse.builder()
+                .id(101L)
+                .baptismId(1L)
+                .documentType("BIRTH_CERTIFICATE")
+                .originalFilename("birth.pdf")
+                .current(true)
+                .build());
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "birth.pdf", "application/pdf", "hello".getBytes());
+
+        mvc.perform(multipart("/api/baptisms/1/birth-certificate").file(file))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(101))
+                .andExpect(jsonPath("$.documentType").value("BIRTH_CERTIFICATE"))
+                .andExpect(jsonPath("$.current").value(true));
+
+        verify(auditService).logUpdate(SacramentType.BAPTISM, 1L, 10L, "birth_certificate_upload");
+    }
+
+    @Test
+    void listBirthCertificateVersions_returns200() throws Exception {
+        when(authorizationService.findBaptismParishId(1L)).thenReturn(Optional.of(10L));
+        doNothing().when(authorizationService).requireParishAccess(10L);
+        when(birthCertificateService.listVersions(1L)).thenReturn(List.of(
+                BaptismDocumentVersionResponse.builder().id(2L).current(true).build(),
+                BaptismDocumentVersionResponse.builder().id(1L).current(false).build()
+        ));
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/api/baptisms/1/birth-certificate/versions"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(2))
+                .andExpect(jsonPath("$[0].current").value(true))
+                .andExpect(jsonPath("$[1].id").value(1))
+                .andExpect(jsonPath("$[1].current").value(false));
     }
 }

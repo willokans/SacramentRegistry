@@ -68,6 +68,9 @@ public class Baptism {
     @Column(name = "external_certificate_issuing_parish", length = 255)
     private String externalCertificateIssuingParish;
 
+    @Column(name = "birth_certificate_current_path")
+    private String birthCertificateCurrentPath;
+
     @Column(name = "place_of_birth", length = 255)
     private String placeOfBirth;
 

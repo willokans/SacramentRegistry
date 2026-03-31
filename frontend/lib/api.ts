@@ -205,10 +205,25 @@ export interface BaptismResponse {
   externalCertificatePath?: string | null;
   /** Issuing parish name for the external certificate. */
   externalCertificateIssuingParish?: string | null;
+  /** Current birth certificate file path when available. */
+  birthCertificateCurrentPath?: string | null;
   placeOfBirth?: string | null;
   placeOfBaptism?: string | null;
   dateOfBaptism?: string | null;
   liberNo?: string | null;
+}
+
+export interface BaptismDocumentVersionResponse {
+  id: number;
+  baptismId: number;
+  documentType: string;
+  originalFilename: string;
+  contentType?: string | null;
+  sizeBytes?: number | null;
+  uploadedAt: string;
+  uploadedById?: number | null;
+  uploadedByName?: string | null;
+  current: boolean;
 }
 
 export interface BaptismRequest {
@@ -604,6 +619,75 @@ export async function uploadBaptismExternalCertificate(
     throw new Error(msg || 'Failed to upload certificate');
   }
   return res.json();
+}
+
+/** Upload birth certificate attachment for an existing baptism (multipart field `file`). */
+export async function uploadBaptismBirthCertificate(
+  baptismId: number,
+  file: File
+): Promise<BaptismDocumentVersionResponse> {
+  const formData = new FormData();
+  formData.set('file', file);
+  const token = getStoredToken();
+  const headers: HeadersInit = {};
+  if (token) (headers as Record<string, string>).Authorization = `Bearer ${token}`;
+
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/baptisms/${baptismId}/birth-certificate`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Unauthorized');
+    const text = await res.text();
+    let msg = text;
+    try {
+      const json = JSON.parse(text) as { error?: string; message?: string; detail?: string };
+      if (typeof json?.detail === 'string' && json.detail.trim()) msg = json.detail;
+      else if (typeof json?.message === 'string' && json.message.trim()) msg = json.message;
+      else if (typeof json?.error === 'string' && json.error.trim()) msg = json.error;
+    } catch {
+      if (text && text.length < 200) msg = text;
+    }
+    throw new Error(msg || 'Failed to upload birth certificate');
+  }
+  return res.json();
+}
+
+/** Fetch current birth certificate attachment for a baptism. */
+export async function fetchBaptismBirthCertificate(baptismId: number): Promise<Blob> {
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/baptisms/${baptismId}/birth-certificate`, {
+    headers: getAuthHeaders(),
+  });
+  if (res.status === 404) throw new Error('No birth certificate for this baptism');
+  if (!res.ok) throw new Error(res.status === 401 ? 'Unauthorized' : 'Failed to load birth certificate');
+  return res.blob();
+}
+
+/** Fetch birth certificate versions for a baptism (latest first). */
+export async function fetchBaptismBirthCertificateVersions(
+  baptismId: number
+): Promise<BaptismDocumentVersionResponse[]> {
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/baptisms/${baptismId}/birth-certificate/versions`, {
+    headers: getAuthHeaders(),
+  });
+  if (res.status === 404) return [];
+  if (!res.ok) throw new Error(res.status === 401 ? 'Unauthorized' : 'Failed to load birth certificate history');
+  return res.json();
+}
+
+/** Fetch a specific historical birth certificate version file. */
+export async function fetchBaptismBirthCertificateVersion(
+  baptismId: number,
+  versionId: number
+): Promise<Blob> {
+  const res = await fetchWithRetry(
+    `${getBaseUrl()}/api/baptisms/${baptismId}/birth-certificate/versions/${versionId}`,
+    { headers: getAuthHeaders() }
+  );
+  if (res.status === 404) throw new Error('Birth certificate version not found');
+  if (!res.ok) throw new Error(res.status === 401 ? 'Unauthorized' : 'Failed to load birth certificate version');
+  return res.blob();
 }
 
 export async function createBaptism(parishId: number, body: BaptismRequest): Promise<BaptismResponse> {

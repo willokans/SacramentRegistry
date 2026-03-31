@@ -182,6 +182,7 @@ public class BaptismServiceImpl implements BaptismService {
                 .note(e.getNote())
                 .externalCertificatePath(e.getExternalCertificatePath())
                 .externalCertificateIssuingParish(e.getExternalCertificateIssuingParish())
+                .birthCertificateCurrentPath(e.getBirthCertificateCurrentPath())
                 .placeOfBirth(e.getPlaceOfBirth())
                 .placeOfBaptism(e.getPlaceOfBaptism())
                 .dateOfBaptism(e.getDateOfBaptism())

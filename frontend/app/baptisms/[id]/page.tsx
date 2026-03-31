@@ -12,8 +12,13 @@ import {
   fetchBaptismNoteHistory,
   fetchBaptismExternalCertificate,
   uploadBaptismExternalCertificate,
+  uploadBaptismBirthCertificate,
+  fetchBaptismBirthCertificate,
+  fetchBaptismBirthCertificateVersions,
+  fetchBaptismBirthCertificateVersion,
   type BaptismResponse,
   type BaptismNoteResponse,
+  type BaptismDocumentVersionResponse,
 } from '@/lib/api';
 import { saveNotesOptimistically } from '@/lib/optimistic-notes';
 
@@ -39,6 +44,13 @@ function sanitizeFilenamePart(value: string | null | undefined): string {
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '') || '';
+}
+
+function formatFileSize(bytes: number | null | undefined): string {
+  if (typeof bytes !== 'number' || Number.isNaN(bytes) || bytes <= 0) return 'Unknown size';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /** External baptism: certificate on file, or issuing parish recorded (pending proof), or legacy placeholder row. */
@@ -78,6 +90,14 @@ export default function BaptismViewPage() {
   const [externalCertUploading, setExternalCertUploading] = useState(false);
   const [externalCertUploadError, setExternalCertUploadError] = useState<string | null>(null);
   const externalCertFileInputRef = useRef<HTMLInputElement>(null);
+  const [birthCertVersions, setBirthCertVersions] = useState<BaptismDocumentVersionResponse[]>([]);
+  const [birthCertVersionsLoading, setBirthCertVersionsLoading] = useState(false);
+  const [birthCertVersionsError, setBirthCertVersionsError] = useState<string | null>(null);
+  const [birthCertUploadFile, setBirthCertUploadFile] = useState<File | null>(null);
+  const [birthCertUploading, setBirthCertUploading] = useState(false);
+  const [birthCertUploadError, setBirthCertUploadError] = useState<string | null>(null);
+  const [birthCertActionError, setBirthCertActionError] = useState<string | null>(null);
+  const birthCertFileInputRef = useRef<HTMLInputElement>(null);
 
   const isExternalBaptism = baptism != null ? isExternalBaptismRecord(baptism) : false;
   const hasUploadedExternalCertificate =
@@ -151,6 +171,32 @@ export default function BaptismViewPage() {
   }, [id, baptism?.id]);
 
   useEffect(() => {
+    if (baptism == null || Number.isNaN(id)) {
+      setBirthCertVersions([]);
+      return;
+    }
+    let cancelled = false;
+    setBirthCertVersionsLoading(true);
+    setBirthCertVersionsError(null);
+    fetchBaptismBirthCertificateVersions(id)
+      .then((list) => {
+        if (!cancelled) setBirthCertVersions(list);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setBirthCertVersions([]);
+          setBirthCertVersionsError(e instanceof Error ? e.message : 'Failed to load birth certificate history');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setBirthCertVersionsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, baptism?.id]);
+
+  useEffect(() => {
     if (!certificateModalOpen || !canViewExternalCertificate || Number.isNaN(id)) return;
     let cancelled = false;
     setCertificateLoading(true);
@@ -210,6 +256,109 @@ export default function BaptismViewPage() {
       setCertificateError('Failed to open certificate');
     }
   }, [id, canViewExternalCertificate]);
+
+  const handleBirthCertFileChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    setBirthCertUploadFile(f ?? null);
+    setBirthCertUploadError(null);
+  }, []);
+
+  const refreshBirthCertificateVersions = useCallback(async () => {
+    if (!id || Number.isNaN(id)) return;
+    const list = await fetchBaptismBirthCertificateVersions(id);
+    setBirthCertVersions(list);
+  }, [id]);
+
+  const handleReplaceBirthCertificate = useCallback(async () => {
+    if (baptism == null || !birthCertUploadFile) return;
+    const maxBytes = 2 * 1024 * 1024;
+    if (birthCertUploadFile.size > maxBytes) {
+      setBirthCertUploadError('Birth certificate file is too large. Maximum size is 2 MB.');
+      return;
+    }
+    if (
+      baptism.birthCertificateCurrentPath &&
+      !window.confirm('Replace the current birth certificate? The previous version will remain in history.')
+    ) {
+      return;
+    }
+    setBirthCertUploading(true);
+    setBirthCertUploadError(null);
+    setBirthCertActionError(null);
+    try {
+      await uploadBaptismBirthCertificate(baptism.id, birthCertUploadFile);
+      await refreshBirthCertificateVersions();
+      setBirthCertUploadFile(null);
+      if (birthCertFileInputRef.current) birthCertFileInputRef.current.value = '';
+      setBaptism((prev) => (prev ? { ...prev, birthCertificateCurrentPath: prev.birthCertificateCurrentPath ?? 'uploaded' } : prev));
+    } catch (e) {
+      setBirthCertUploadError(e instanceof Error ? e.message : 'Failed to upload birth certificate');
+    } finally {
+      setBirthCertUploading(false);
+    }
+  }, [birthCertUploadFile, baptism, refreshBirthCertificateVersions]);
+
+  const handleDownloadCurrentBirthCertificate = useCallback(async () => {
+    if (!id || !baptism) return;
+    setBirthCertActionError(null);
+    try {
+      const blob = await fetchBaptismBirthCertificate(id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const baptismName = sanitizeFilenamePart(baptism.baptismName);
+      const surname = sanitizeFilenamePart(baptism.surname);
+      const baseName = [baptismName, surname].filter(Boolean).join('-') || `baptism-${id}`;
+      const ext = blob.type === 'application/pdf' ? 'pdf' : 'png';
+      a.download = `birth-certificate-${baseName}.${ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setBirthCertActionError(e instanceof Error ? e.message : 'Download failed');
+    }
+  }, [id, baptism]);
+
+  const handleViewCurrentBirthCertificate = useCallback(async () => {
+    if (!id) return;
+    setBirthCertActionError(null);
+    try {
+      const blob = await fetchBaptismBirthCertificate(id);
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) {
+      setBirthCertActionError(e instanceof Error ? e.message : 'Failed to open birth certificate');
+    }
+  }, [id]);
+
+  const handleDownloadBirthCertificateVersion = useCallback(async (version: BaptismDocumentVersionResponse) => {
+    if (!id) return;
+    setBirthCertActionError(null);
+    try {
+      const blob = await fetchBaptismBirthCertificateVersion(id, version.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = version.originalFilename || `birth-certificate-v${version.id}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setBirthCertActionError(e instanceof Error ? e.message : 'Failed to download birth certificate version');
+    }
+  }, [id]);
+
+  const handleViewBirthCertificateVersion = useCallback(async (version: BaptismDocumentVersionResponse) => {
+    if (!id) return;
+    setBirthCertActionError(null);
+    try {
+      const blob = await fetchBaptismBirthCertificateVersion(id, version.id);
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) {
+      setBirthCertActionError(e instanceof Error ? e.message : 'Failed to open birth certificate version');
+    }
+  }, [id]);
 
   async function handleSaveNotes() {
     if (baptism == null) return;
@@ -286,6 +435,9 @@ export default function BaptismViewPage() {
   }
 
   const parentAddress = baptism.parentAddress ?? baptism.address ?? '';
+  const hasBirthCertificate = Boolean((baptism.birthCertificateCurrentPath ?? '').trim()) ||
+    birthCertVersions.some((v) => v.current);
+  const currentBirthCertificateVersion = birthCertVersions.find((v) => v.current) ?? null;
 
   return (
     <AuthenticatedLayout>
@@ -440,6 +592,140 @@ export default function BaptismViewPage() {
               />
               <DetailRow label="Remarks" value={baptism.note || '—'} />
             </dl>
+          </section>
+
+          <section className={cardClass}>
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <FolderIcon className="h-5 w-5 text-gray-500" />
+              Birth Certificate
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Keep the latest file as current while retaining full version history.
+            </p>
+
+            {hasBirthCertificate ? (
+              <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p className="text-sm text-gray-900 font-medium">Current file: {currentBirthCertificateVersion?.originalFilename || 'Uploaded file'}</p>
+                <p className="mt-1 text-xs text-gray-600">
+                  {currentBirthCertificateVersion
+                    ? `Uploaded ${formatDateTime(currentBirthCertificateVersion.uploadedAt)} by ${currentBirthCertificateVersion.uploadedByName || 'Unknown'}`
+                    : 'Current version details unavailable'}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleViewCurrentBirthCertificate()}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    <ExpandIcon className="h-4 w-4" />
+                    View Current
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDownloadCurrentBirthCertificate()}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    <DownloadIcon className="h-4 w-4" />
+                    Download Current
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-gray-600">No birth certificate uploaded yet.</p>
+            )}
+
+            <div className="mt-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4">
+              <p className="text-sm font-medium text-gray-900">Replace certificate</p>
+              <p className="mt-1 text-xs text-gray-600">Accepted formats: PDF, JPG, PNG. Maximum size: 2 MB.</p>
+              <input
+                ref={birthCertFileInputRef}
+                type="file"
+                accept="application/pdf,image/png,image/jpeg,image/jpg"
+                className="sr-only"
+                aria-label="Select birth certificate file"
+                onChange={handleBirthCertFileChange}
+              />
+              <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                <button
+                  type="button"
+                  onClick={() => birthCertFileInputRef.current?.click()}
+                  disabled={birthCertUploading}
+                  className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Choose file
+                </button>
+                {birthCertUploadFile && (
+                  <span className="text-sm text-gray-700 truncate max-w-full" title={birthCertUploadFile.name}>
+                    {birthCertUploadFile.name}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void handleReplaceBirthCertificate()}
+                  disabled={!birthCertUploadFile || birthCertUploading}
+                  className="inline-flex items-center justify-center rounded-lg bg-sancta-maroon px-4 py-2 text-sm font-medium text-white hover:bg-sancta-maroon-dark disabled:opacity-50 disabled:pointer-events-none"
+                >
+                  {birthCertUploading ? 'Uploading…' : hasBirthCertificate ? 'Replace certificate' : 'Upload certificate'}
+                </button>
+              </div>
+              {birthCertUploadError && (
+                <p role="alert" className="mt-3 text-sm text-red-600">
+                  {birthCertUploadError}
+                </p>
+              )}
+              {birthCertActionError && (
+                <p role="alert" className="mt-2 text-sm text-red-600">
+                  {birthCertActionError}
+                </p>
+              )}
+            </div>
+
+            <div className="mt-4">
+              <h3 className="text-sm font-semibold text-gray-900">Version history</h3>
+              {birthCertVersionsLoading ? (
+                <p className="mt-2 text-sm text-gray-500">Loading versions…</p>
+              ) : birthCertVersionsError ? (
+                <p role="alert" className="mt-2 text-sm text-red-600">{birthCertVersionsError}</p>
+              ) : birthCertVersions.length === 0 ? (
+                <p className="mt-2 text-sm text-gray-500">No versions available yet.</p>
+              ) : (
+                <ul className="mt-3 space-y-3" role="list">
+                  {birthCertVersions.map((version) => (
+                    <li key={version.id} className="rounded-lg border border-gray-200 p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium text-gray-900">{version.originalFilename || `Version ${version.id}`}</p>
+                        {version.current && (
+                          <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
+                            Current
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-xs text-gray-600">
+                        {formatDateTime(version.uploadedAt)} by {version.uploadedByName || 'Unknown'} • {formatFileSize(version.sizeBytes)}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleViewBirthCertificateVersion(version)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                          <ExpandIcon className="h-3.5 w-3.5" />
+                          View
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDownloadBirthCertificateVersion(version)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                          <DownloadIcon className="h-3.5 w-3.5" />
+                          Download
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </section>
 
           <section className={cardClass}>

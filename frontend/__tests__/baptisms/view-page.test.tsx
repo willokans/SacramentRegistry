@@ -12,6 +12,8 @@ import {
   getStoredUser,
   fetchBaptism,
   fetchBaptismNoteHistory,
+  fetchBaptismBirthCertificateVersions,
+  uploadBaptismBirthCertificate,
   updateBaptismNotes,
   fetchBaptismExternalCertificate,
   uploadBaptismExternalCertificate,
@@ -29,6 +31,10 @@ jest.mock('@/lib/api', () => ({
   fetchBaptism: jest.fn(),
   updateBaptismNotes: jest.fn(),
   fetchBaptismNoteHistory: jest.fn(),
+  fetchBaptismBirthCertificateVersions: jest.fn(),
+  uploadBaptismBirthCertificate: jest.fn(),
+  fetchBaptismBirthCertificate: jest.fn(),
+  fetchBaptismBirthCertificateVersion: jest.fn(),
   emailBaptismCertificate: jest.fn(),
   fetchBaptismExternalCertificate: jest.fn(),
   uploadBaptismExternalCertificate: jest.fn(),
@@ -71,6 +77,7 @@ describe('Baptism view page', () => {
       parishId: 10,
     });
     (fetchBaptismNoteHistory as jest.Mock).mockResolvedValue([]);
+    (fetchBaptismBirthCertificateVersions as jest.Mock).mockResolvedValue([]);
     (fetchBaptismExternalCertificate as jest.Mock).mockResolvedValue(new Blob(['pdf'], { type: 'application/pdf' }));
   });
 
@@ -314,6 +321,7 @@ describe('Baptism view page when baptized in another parish (external certificat
       externalCertificateIssuingParish: 'Holy Family Catholic Church, Abuja',
     });
     (fetchBaptismNoteHistory as jest.Mock).mockResolvedValue([]);
+    (fetchBaptismBirthCertificateVersions as jest.Mock).mockResolvedValue([]);
     (fetchBaptismExternalCertificate as jest.Mock).mockResolvedValue(new Blob(['cert content'], { type: 'application/pdf' }));
   });
 
@@ -409,6 +417,7 @@ describe('Baptism view page when external baptism proof is pending', () => {
     (useParams as jest.Mock).mockReturnValue({ id: '123' });
     (fetchBaptism as jest.Mock).mockResolvedValue({ ...pendingBaptismFromApi });
     (fetchBaptismNoteHistory as jest.Mock).mockResolvedValue([]);
+    (fetchBaptismBirthCertificateVersions as jest.Mock).mockResolvedValue([]);
     (fetchBaptismExternalCertificate as jest.Mock).mockResolvedValue(new Blob(['pdf'], { type: 'application/pdf' }));
     (fetchBaptismExternalCertificate as jest.Mock).mockClear();
     (uploadBaptismExternalCertificate as jest.Mock).mockReset();
@@ -419,11 +428,12 @@ describe('Baptism view page when external baptism proof is pending', () => {
     await waitFor(() => {
       expect(screen.getByText(/Maria/i)).toBeInTheDocument();
     });
+    const externalSection = screen.getByRole('heading', { name: /external baptism certificate/i }).closest('section');
     expect(screen.getByText('• Baptized in Another Parish')).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent(/awaiting baptism proof/i);
-    expect(screen.getByRole('button', { name: /choose file/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /upload certificate/i })).toBeDisabled();
-    expect(screen.getByLabelText(/select baptism certificate file/i)).toBeInTheDocument();
+    expect(within(externalSection!).getByRole('button', { name: /choose file/i })).toBeInTheDocument();
+    expect(within(externalSection!).getByRole('button', { name: /^upload certificate$/i })).toBeDisabled();
+    expect(within(externalSection!).getByLabelText(/select baptism certificate file/i)).toBeInTheDocument();
   });
 
   it('does not offer See Certificate, download, or view actions until certificate is uploaded', async () => {
@@ -460,10 +470,11 @@ describe('Baptism view page when external baptism proof is pending', () => {
       expect(screen.getByText(/Maria/i)).toBeInTheDocument();
     });
 
-    const input = screen.getByLabelText(/select baptism certificate file/i);
+    const externalSection = screen.getByRole('heading', { name: /external baptism certificate/i }).closest('section');
+    const input = within(externalSection!).getByLabelText(/select baptism certificate file/i);
     await user.upload(input, file);
 
-    const uploadBtn = screen.getByRole('button', { name: /upload certificate/i });
+    const uploadBtn = within(externalSection!).getByRole('button', { name: /^upload certificate$/i });
     expect(uploadBtn).not.toBeDisabled();
     await user.click(uploadBtn);
 
@@ -475,5 +486,88 @@ describe('Baptism view page when external baptism proof is pending', () => {
     });
     expect(screen.getByRole('button', { name: /view fullscreen/i })).toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+});
+
+describe('Baptism view page birth certificate card', () => {
+  beforeEach(() => {
+    (getStoredToken as jest.Mock).mockReturnValue('token');
+    (getStoredUser as jest.Mock).mockReturnValue({ username: 'admin', displayName: 'Admin', role: 'ADMIN' });
+    (useParams as jest.Mock).mockReturnValue({ id: '123' });
+    (fetchBaptism as jest.Mock).mockResolvedValue({
+      id: 123,
+      baptismName: 'John',
+      otherNames: '',
+      surname: 'Doe',
+      gender: 'MALE',
+      dateOfBirth: '2020-01-15',
+      fathersName: 'James',
+      mothersName: 'Mary',
+      sponsorNames: 'Peter, Anne',
+      officiatingPriest: 'Fr. Williams',
+      parishId: 10,
+      birthCertificateCurrentPath: null,
+    });
+    (fetchBaptismNoteHistory as jest.Mock).mockResolvedValue([]);
+    (fetchBaptismBirthCertificateVersions as jest.Mock).mockClear();
+    (fetchBaptismBirthCertificateVersions as jest.Mock).mockResolvedValue([]);
+    (uploadBaptismBirthCertificate as jest.Mock).mockReset();
+  });
+
+  it('shows birth certificate card with upload and empty history state', async () => {
+    render(<BaptismViewPage />);
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /birth certificate/i })).toBeInTheDocument();
+    });
+    expect(screen.getByText(/no birth certificate uploaded yet/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /choose file/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /upload certificate/i })).toBeDisabled();
+    expect(screen.getByText(/no versions available yet/i)).toBeInTheDocument();
+  });
+
+  it('uploads replacement and refreshes version history', async () => {
+    const user = userEvent.setup();
+    const file = new File(['%PDF-1.4'], 'birth-cert.pdf', { type: 'application/pdf' });
+    (uploadBaptismBirthCertificate as jest.Mock).mockResolvedValue({
+      id: 10,
+      baptismId: 123,
+      documentType: 'BIRTH_CERTIFICATE',
+      originalFilename: 'birth-cert.pdf',
+      uploadedAt: '2026-03-30T10:00:00Z',
+      current: true,
+    });
+    (fetchBaptismBirthCertificateVersions as jest.Mock)
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([
+        {
+          id: 10,
+          baptismId: 123,
+          documentType: 'BIRTH_CERTIFICATE',
+          originalFilename: 'birth-cert.pdf',
+          uploadedAt: '2026-03-30T10:00:00Z',
+          uploadedByName: 'Admin',
+          sizeBytes: 2048,
+          current: true,
+        },
+      ]);
+
+    render(<BaptismViewPage />);
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /birth certificate/i })).toBeInTheDocument();
+    });
+
+    const initialCalls = (fetchBaptismBirthCertificateVersions as jest.Mock).mock.calls.length;
+    const input = screen.getByLabelText(/select birth certificate file/i);
+    await user.upload(input, file);
+    await user.click(screen.getByRole('button', { name: /upload certificate/i }));
+
+    await waitFor(() => {
+      expect(uploadBaptismBirthCertificate).toHaveBeenCalledWith(123, file);
+    });
+    await waitFor(() => {
+      expect((fetchBaptismBirthCertificateVersions as jest.Mock).mock.calls.length).toBeGreaterThan(initialCalls);
+    });
+    expect(screen.getByText('Current')).toBeInTheDocument();
+    expect(screen.getAllByText(/birth-cert\.pdf/i).length).toBeGreaterThan(0);
   });
 });

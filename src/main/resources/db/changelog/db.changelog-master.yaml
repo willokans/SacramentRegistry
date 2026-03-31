@@ -213,3 +213,5 @@ databaseChangeLog:
       file: db/changelog/changes/019-seed-super-admin.yaml
   - include:
       file: db/changelog/changes/021-parish-require-marriage-confirmation.yaml
+  - include:
+      file: db/changelog/changes/022-birth-certificate-document-versioning.yaml

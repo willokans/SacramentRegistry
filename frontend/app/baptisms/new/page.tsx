@@ -6,7 +6,7 @@ import Link from 'next/link';
 import AuthenticatedLayout from '@/components/AuthenticatedLayout';
 import AddRecordDesktopOnlyMessage from '@/components/AddRecordDesktopOnlyMessage';
 import { useParish } from '@/context/ParishContext';
-import { createBaptism, getStoredUser, type BaptismRequest } from '@/lib/api';
+import { createBaptism, getStoredUser, uploadBaptismBirthCertificate, type BaptismRequest } from '@/lib/api';
 import {
   formatParentAddress,
   getRegionsForCountry,
@@ -22,6 +22,8 @@ import OfflineQueueItemStatus from '@/components/offline/OfflineQueueItemStatus'
 import { deleteQueueItemAfterSync, retryOfflineQueueItem } from '@/lib/offline/replay';
 
 type SponsorRow = { firstName: string; lastName: string };
+const MAX_BIRTH_CERTIFICATE_SIZE_BYTES = 2 * 1024 * 1024;
+const ALLOWED_BIRTH_CERTIFICATE_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
 
 export default function BaptismCreatePage() {
   const router = useRouter();
@@ -39,9 +41,12 @@ export default function BaptismCreatePage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [createdBaptismId, setCreatedBaptismId] = useState<number | null>(null);
   const [queuedItemId, setQueuedItemId] = useState<string | null>(null);
   const [draftRecord, setDraftRecord] = useState<OfflineDraftRecord<BaptismDraftPayload> | null>(null);
   const [draftStatus, setDraftStatus] = useState<string | null>(null);
+  const [birthCertificateFile, setBirthCertificateFile] = useState<File | null>(null);
+  const [birthCertificateError, setBirthCertificateError] = useState<string | null>(null);
   const [form, setForm] = useState({
     baptismName: '',
     otherNames: '',
@@ -231,6 +236,7 @@ export default function BaptismCreatePage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setCreatedBaptismId(null);
     const sponsorError = validateSponsors();
     if (sponsorError) {
       setError(sponsorError);
@@ -276,11 +282,29 @@ export default function BaptismCreatePage() {
           },
           { draftId: draftId ?? undefined }
         );
+        if (birthCertificateFile) {
+          setDraftStatus(
+            'Baptism queued for sync. Birth certificate was skipped while offline and can be uploaded later.'
+          );
+        }
         setQueuedItemId(itemId);
         return;
       }
 
-      await createBaptism(parishId as number, payload satisfies BaptismRequest);
+      const created = await createBaptism(parishId as number, payload satisfies BaptismRequest);
+      if (birthCertificateFile) {
+        try {
+          await uploadBaptismBirthCertificate(created.id, birthCertificateFile);
+        } catch (uploadError) {
+          setCreatedBaptismId(created.id);
+          setError(
+            `Baptism was created, but birth certificate upload failed. ${
+              uploadError instanceof Error ? uploadError.message : 'Please try again later.'
+            }`
+          );
+          return;
+        }
+      }
       router.push('/baptisms');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create baptism');
@@ -303,6 +327,28 @@ export default function BaptismCreatePage() {
   function addSponsor() {
     if (sponsors.length >= 2) return;
     setSponsors((prev) => [...prev, { firstName: '', lastName: '' }]);
+  }
+
+  function handleBirthCertificateChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setBirthCertificateError(null);
+    const nextFile = e.target.files?.[0] ?? null;
+    if (!nextFile) {
+      setBirthCertificateFile(null);
+      return;
+    }
+    if (!ALLOWED_BIRTH_CERTIFICATE_TYPES.includes(nextFile.type)) {
+      setBirthCertificateFile(null);
+      setBirthCertificateError('Only PDF, JPG, or PNG files are allowed.');
+      e.target.value = '';
+      return;
+    }
+    if (nextFile.size > MAX_BIRTH_CERTIFICATE_SIZE_BYTES) {
+      setBirthCertificateFile(null);
+      setBirthCertificateError('File is too large. Maximum size is 2 MB.');
+      e.target.value = '';
+      return;
+    }
+    setBirthCertificateFile(nextFile);
   }
 
   const selectedCountryRegions = getRegionsForCountry(parentAddressCountry);
@@ -654,11 +700,49 @@ export default function BaptismCreatePage() {
               className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-sancta-maroon focus:outline-none focus:ring-1 focus:ring-sancta-maroon"
             />
           </div>
+          <div className="rounded-lg border border-gray-200 bg-gray-50/50 p-4">
+            <h3 className="text-sm font-medium text-gray-800">Birth Certificate (optional)</h3>
+            <p className="mt-0.5 text-xs text-gray-500">Accepted formats: PDF, JPG, PNG. Max size: 2 MB.</p>
+            <label htmlFor="birthCertificate" className="sr-only">
+              Birth Certificate (optional)
+            </label>
+            <input
+              id="birthCertificate"
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png"
+              onChange={handleBirthCertificateChange}
+              className="mt-3 block w-full text-sm text-gray-700 file:mr-3 file:rounded-lg file:border-0 file:bg-sancta-maroon file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-sancta-maroon-dark"
+            />
+            {birthCertificateFile ? (
+              <p className="mt-2 text-xs text-gray-600">
+                Selected: {birthCertificateFile.name} ({Math.max(1, Math.round(birthCertificateFile.size / 1024))}{' '}
+                KB)
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-gray-500">
+                Skip for now if unavailable. You can upload it later from the baptism record.
+              </p>
+            )}
+            {birthCertificateError ? (
+              <p role="alert" className="mt-2 text-xs text-red-600">
+                {birthCertificateError}
+              </p>
+            ) : null}
+          </div>
           {error && (
             <p role="alert" className="text-red-600 text-sm">
               {error}
             </p>
           )}
+          {createdBaptismId ? (
+            <p className="text-xs text-amber-700">
+              Baptism record was saved. Continue from{' '}
+              <Link href={`/baptisms/${createdBaptismId}`} className="underline hover:text-amber-800">
+                baptism details
+              </Link>
+              .
+            </p>
+          ) : null}
           {draftStatus && <p className="text-xs text-gray-600">{draftStatus}</p>}
           <div className="flex flex-col sm:flex-row gap-3">
             <button

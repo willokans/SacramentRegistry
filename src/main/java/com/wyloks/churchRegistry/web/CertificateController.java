@@ -1,6 +1,7 @@
 package com.wyloks.churchRegistry.web;
 
 import com.wyloks.churchRegistry.dto.BaptismCertificateDataResponse;
+import com.wyloks.churchRegistry.dto.BaptismDocumentVersionResponse;
 import com.wyloks.churchRegistry.dto.BaptismResponse;
 import com.wyloks.churchRegistry.entity.Baptism;
 import com.wyloks.churchRegistry.entity.FirstHolyCommunion;
@@ -11,6 +12,7 @@ import com.wyloks.churchRegistry.repository.MarriagePartyLegacyRepository;
 import com.wyloks.churchRegistry.entity.SacramentAuditLog.SacramentType;
 import com.wyloks.churchRegistry.security.SacramentAuthorizationService;
 import com.wyloks.churchRegistry.service.BaptismService;
+import com.wyloks.churchRegistry.service.BirthCertificateService;
 import com.wyloks.churchRegistry.service.RemoteFileService;
 import com.wyloks.churchRegistry.service.SacramentAuditService;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +37,7 @@ public class CertificateController {
     private static final long MAX_CERTIFICATE_SIZE = 2L * 1024 * 1024;
 
     private final BaptismService baptismService;
+    private final BirthCertificateService birthCertificateService;
     private final BaptismRepository baptismRepository;
     private final FirstHolyCommunionRepository communionRepository;
     private final MarriagePartyLegacyRepository marriagePartyLegacyRepository;
@@ -102,6 +105,49 @@ public class CertificateController {
         } catch (IllegalStateException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
         }
+    }
+
+    @PostMapping(path = "/baptisms/{id}/birth-certificate", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<BaptismDocumentVersionResponse> uploadBirthCertificate(
+            @PathVariable Long id,
+            @RequestParam("file") MultipartFile file
+    ) {
+        Long parishId = authorizationService.findBaptismParishId(id).orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Baptism not found or has no parish"));
+        authorizationService.requireWriteAccessForParish(parishId);
+        BaptismDocumentVersionResponse created = birthCertificateService.upload(id, file);
+        auditService.logUpdate(SacramentType.BAPTISM, id, parishId, "birth_certificate_upload");
+        return ResponseEntity.ok(created);
+    }
+
+    @GetMapping("/baptisms/{id}/birth-certificate")
+    public ResponseEntity<byte[]> getCurrentBirthCertificate(@PathVariable Long id) {
+        Long parishId = authorizationService.findBaptismParishId(id).orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Baptism not found or has no parish"));
+        authorizationService.requireParishAccess(parishId);
+        auditService.logCertificateDownload(SacramentType.BAPTISM, id, parishId, "birth_certificate_current");
+        return fileResponse(birthCertificateService.downloadCurrent(id));
+    }
+
+    @GetMapping("/baptisms/{id}/birth-certificate/versions")
+    public List<BaptismDocumentVersionResponse> listBirthCertificateVersions(@PathVariable Long id) {
+        Long parishId = authorizationService.findBaptismParishId(id).orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Baptism not found or has no parish"));
+        authorizationService.requireParishAccess(parishId);
+        auditService.logRead(SacramentType.BAPTISM, id, parishId);
+        return birthCertificateService.listVersions(id);
+    }
+
+    @GetMapping("/baptisms/{id}/birth-certificate/versions/{versionId}")
+    public ResponseEntity<byte[]> getBirthCertificateVersion(
+            @PathVariable Long id,
+            @PathVariable Long versionId
+    ) {
+        Long parishId = authorizationService.findBaptismParishId(id).orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Baptism not found or has no parish"));
+        authorizationService.requireParishAccess(parishId);
+        auditService.logCertificateDownload(SacramentType.BAPTISM, id, parishId, "birth_certificate_version");
+        return fileResponse(birthCertificateService.downloadVersion(id, versionId));
     }
 
     @GetMapping("/baptisms/{id}/external-certificate")
