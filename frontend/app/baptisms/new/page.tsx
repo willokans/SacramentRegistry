@@ -7,7 +7,12 @@ import AuthenticatedLayout from '@/components/AuthenticatedLayout';
 import AddRecordDesktopOnlyMessage from '@/components/AddRecordDesktopOnlyMessage';
 import { useParish } from '@/context/ParishContext';
 import { createBaptism, getStoredUser, type BaptismRequest } from '@/lib/api';
-import { NIGERIAN_STATES } from '@/lib/nigerian-states';
+import {
+  formatParentAddress,
+  getRegionsForCountry,
+  resolveCountryCode,
+  searchCountries,
+} from '@/lib/location-data';
 import { deleteDraft, loadDraft, saveDraft, type OfflineDraftRecord } from '@/lib/offline/drafts';
 import { useDebouncedDraftAutosave } from '@/lib/offline/draftAutosave';
 import { useNetworkStatus } from '@/lib/offline/network';
@@ -51,14 +56,17 @@ export default function BaptismCreatePage() {
     dateOfBaptism: '',
   });
   const [sponsors, setSponsors] = useState<SponsorRow[]>([{ firstName: '', lastName: '' }]);
-  const [parentAddressState, setParentAddressState] = useState<string>('');
+  const [parentAddressCountry, setParentAddressCountry] = useState<string>('');
+  const [parentAddressRegion, setParentAddressRegion] = useState<string>('');
   const [parentAddressLine, setParentAddressLine] = useState<string>('');
 
   type BaptismDraftPayload = {
     form: typeof form;
     sponsors: SponsorRow[];
     parentAddressLine: string;
-    parentAddressState: string;
+    parentAddressCountry: string;
+    parentAddressRegion: string;
+    parentAddressState?: string;
   };
 
   const { isOnline } = useNetworkStatus();
@@ -80,7 +88,8 @@ export default function BaptismCreatePage() {
       form,
       sponsors,
       parentAddressLine,
-      parentAddressState,
+      parentAddressCountry,
+      parentAddressRegion,
     },
     enabled: false,
   });
@@ -126,7 +135,8 @@ export default function BaptismCreatePage() {
         form,
         sponsors,
         parentAddressLine,
-        parentAddressState,
+        parentAddressCountry,
+        parentAddressRegion,
       };
       await saveDraft<BaptismDraftPayload>(draftId, 'baptism_create', payload);
       const loaded = await loadDraft<BaptismDraftPayload>(draftId);
@@ -142,8 +152,17 @@ export default function BaptismCreatePage() {
     hasSetPlaceOfBaptismDefault.current = true; // prevent default parish autopopulate from overriding restored draft
     setForm(draftRecord.payload.form);
     setSponsors(draftRecord.payload.sponsors);
-    setParentAddressLine(draftRecord.payload.parentAddressLine);
-    setParentAddressState(draftRecord.payload.parentAddressState);
+
+    const line = draftRecord.payload.parentAddressLine ?? '';
+    const country = draftRecord.payload.parentAddressCountry ?? '';
+    const migratedRegion =
+      draftRecord.payload.parentAddressRegion ?? draftRecord.payload.parentAddressState ?? '';
+    const migratedCountry =
+      country.trim() || (draftRecord.payload.parentAddressState ? 'Nigeria' : '');
+
+    setParentAddressLine(line);
+    setParentAddressCountry(migratedCountry);
+    setParentAddressRegion(migratedRegion);
     setDraftStatus('Draft loaded from this device.');
   }
 
@@ -205,7 +224,8 @@ export default function BaptismCreatePage() {
       sponsors.length > 0 &&
       form.officiatingPriest.trim() &&
       parentAddressLine.trim() &&
-      parentAddressState.trim(),
+      parentAddressCountry.trim() &&
+      parentAddressRegion.trim(),
   );
 
   async function handleSubmit(e: React.FormEvent) {
@@ -230,9 +250,11 @@ export default function BaptismCreatePage() {
     }
     setSubmitting(true);
     try {
-      const line = parentAddressLine.trim();
-      const state = parentAddressState.trim();
-      const parentAddress = state ? (line ? `${line}, ${state}` : state) : undefined;
+      const parentAddress = formatParentAddress({
+        addressLine: parentAddressLine,
+        region: parentAddressRegion,
+        country: parentAddressCountry,
+      });
       const sponsorNames = buildSponsorNames();
       const payload = {
         ...form,
@@ -282,6 +304,24 @@ export default function BaptismCreatePage() {
     if (sponsors.length >= 2) return;
     setSponsors((prev) => [...prev, { firstName: '', lastName: '' }]);
   }
+
+  const selectedCountryRegions = getRegionsForCountry(parentAddressCountry);
+  const selectedCountryCode = resolveCountryCode(parentAddressCountry);
+  const hasPredefinedRegions = selectedCountryRegions.length > 0;
+  const isCountrySelected = parentAddressCountry.trim().length > 0;
+  const filteredCountries = searchCountries(parentAddressCountry).slice(0, 50);
+  const normalizedRegionSearch = parentAddressRegion.trim().toLowerCase();
+  const filteredRegions = selectedCountryRegions
+    .filter((region) => region.toLowerCase().includes(normalizedRegionSearch))
+    .slice(0, 100);
+  const postalCodeHint =
+    selectedCountryCode === 'GB'
+      ? 'Include Postcode'
+      : selectedCountryCode === 'IE'
+        ? 'Include Eircode'
+        : selectedCountryCode === 'US'
+          ? 'Include ZIP code'
+          : 'Include postal code if available';
 
   return (
     <AuthenticatedLayout>
@@ -456,6 +496,95 @@ export default function BaptismCreatePage() {
               className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-sancta-maroon focus:outline-none focus:ring-1 focus:ring-sancta-maroon"
             />
           </div>
+          <div className="rounded-lg border border-gray-200 bg-gray-50/50 p-4">
+            <h3 className="text-sm font-medium text-gray-800">Parents Address</h3>
+            <p className="mt-0.5 text-xs text-gray-500">{postalCodeHint}</p>
+            <div className="mt-3 space-y-4">
+              <div>
+                <label htmlFor="parentAddressLine" className="block text-sm font-medium text-gray-700">
+                  Parents Address: street/town{selectedCountryCode ? ` (${postalCodeHint})` : ''}{' '}
+                  <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="parentAddressLine"
+                  type="text"
+                  required
+                  placeholder={
+                    selectedCountryCode === 'GB'
+                      ? 'e.g. 10 High Street, SW1A 1AA'
+                      : selectedCountryCode === 'IE'
+                        ? 'e.g. 10 OConnell Street, D01 F5P2'
+                        : selectedCountryCode === 'US'
+                          ? 'e.g. 10 Main St, 10001'
+                          : 'e.g. town, area, street'
+                  }
+                  value={parentAddressLine}
+                  onChange={(e) => setParentAddressLine(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-sancta-maroon focus:outline-none focus:ring-1 focus:ring-sancta-maroon"
+                />
+              </div>
+              <div>
+                <label htmlFor="parentAddressCountry" className="block text-sm font-medium text-gray-700">
+                  Country <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="parentAddressCountry"
+                  type="search"
+                  list="parent-address-country-options"
+                  required
+                  placeholder="Search country"
+                  value={parentAddressCountry}
+                  onChange={(e) => {
+                    setParentAddressCountry(e.target.value);
+                    setParentAddressRegion('');
+                  }}
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-sancta-maroon focus:outline-none focus:ring-1 focus:ring-sancta-maroon"
+                />
+                <datalist id="parent-address-country-options">
+                  {filteredCountries.map((country) => (
+                    <option key={country.code} value={country.name} />
+                  ))}
+                </datalist>
+              </div>
+              <div>
+                <label htmlFor="parentAddressRegion" className="block text-sm font-medium text-gray-700">
+                  State/Region <span className="text-red-500">*</span>
+                </label>
+                {isCountrySelected && hasPredefinedRegions ? (
+                  <>
+                    <input
+                      id="parentAddressRegion"
+                      type="search"
+                      list="parent-address-region-options"
+                      required
+                      placeholder="Search state/region"
+                      value={parentAddressRegion}
+                      onChange={(e) => setParentAddressRegion(e.target.value)}
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-sancta-maroon focus:outline-none focus:ring-1 focus:ring-sancta-maroon"
+                    />
+                    <datalist id="parent-address-region-options">
+                      {filteredRegions.map((region) => (
+                        <option key={region} value={region} />
+                      ))}
+                    </datalist>
+                  </>
+                ) : (
+                  <input
+                    id="parentAddressRegion"
+                    type="text"
+                    required
+                    disabled={!isCountrySelected}
+                    placeholder={
+                      isCountrySelected ? 'Enter state/region' : 'Select country first'
+                    }
+                    value={parentAddressRegion}
+                    onChange={(e) => setParentAddressRegion(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-sancta-maroon focus:outline-none focus:ring-1 focus:ring-sancta-maroon disabled:bg-gray-100 disabled:text-gray-500"
+                  />
+                )}
+              </div>
+            </div>
+          </div>
           <div>
             <p className="block text-sm font-medium text-gray-700 mb-2">
               Sponsor <span className="text-red-500">*</span>
@@ -524,45 +653,6 @@ export default function BaptismCreatePage() {
               onChange={(e) => setForm((f) => ({ ...f, officiatingPriest: e.target.value }))}
               className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-sancta-maroon focus:outline-none focus:ring-1 focus:ring-sancta-maroon"
             />
-          </div>
-          <div className="rounded-lg border border-gray-200 bg-gray-50/50 p-4">
-            <h3 className="text-sm font-medium text-gray-800">Address</h3>
-            <p className="mt-0.5 text-xs text-gray-500">e.g. town, area, street (without state)</p>
-            <div className="mt-3 space-y-4">
-              <div>
-                <label htmlFor="parentAddressLine" className="block text-sm font-medium text-gray-700">
-                  Address: e.g. town, area, street (without state) <span className="text-red-500">*</span>
-                </label>
-                <input
-                  id="parentAddressLine"
-                  type="text"
-                  required
-                  placeholder="e.g. town, area, street (without state)"
-                  value={parentAddressLine}
-                  onChange={(e) => setParentAddressLine(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-sancta-maroon focus:outline-none focus:ring-1 focus:ring-sancta-maroon"
-                />
-              </div>
-              <div>
-                <label htmlFor="parentAddressState" className="block text-sm font-medium text-gray-700">
-                  Select state <span className="text-red-500">*</span>
-                </label>
-                <select
-                  id="parentAddressState"
-                  required
-                  value={parentAddressState}
-                  onChange={(e) => setParentAddressState(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-sancta-maroon focus:outline-none focus:ring-1 focus:ring-sancta-maroon"
-                >
-                  <option value="">Select state</option>
-                  {NIGERIAN_STATES.map((state) => (
-                    <option key={state} value={state}>
-                      {state}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
           </div>
           {error && (
             <p role="alert" className="text-red-600 text-sm">

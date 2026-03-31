@@ -67,8 +67,9 @@ describe('Baptism create page offline drafts', () => {
       await user.type(document.getElementById('sponsor-first-0')!, 'Peter');
       await user.type(document.getElementById('sponsor-last-0')!, 'Doe');
 
-      await user.type(screen.getByLabelText(/address: e\.g|town, area, street/i), '10 Main St');
-      await user.selectOptions(screen.getByLabelText(/select state/i), 'Lagos');
+      await user.type(screen.getByLabelText(/parents address:/i), '10 Main St');
+      await user.type(screen.getByLabelText(/^country/i), 'Nigeria');
+      await user.type(screen.getByLabelText(/state\/region/i), 'Lagos');
     })();
   }
 
@@ -96,8 +97,9 @@ describe('Baptism create page offline drafts', () => {
     expect(document.getElementById('surname')).toHaveValue('Doe');
     expect(document.getElementById('sponsor-first-0')).toHaveValue('Peter');
     expect(document.getElementById('sponsor-last-0')).toHaveValue('Doe');
-    expect(screen.getByLabelText(/address: e\.g|town, area, street/i)).toHaveValue('10 Main St');
-    expect(screen.getByLabelText(/select state/i)).toHaveValue('Lagos');
+    expect(screen.getByLabelText(/parents address:/i)).toHaveValue('10 Main St');
+    expect(screen.getByLabelText(/^country/i)).toHaveValue('Nigeria');
+    expect(screen.getByLabelText(/state\/region/i)).toHaveValue('Lagos');
 
     const draftKey = 'church_registry_offline_draft:baptism_create:10:admin';
     expect(window.localStorage.getItem(draftKey)).not.toBeNull();
@@ -138,6 +140,47 @@ describe('Baptism create page offline drafts', () => {
 
     expect(screen.getByLabelText(/^baptism name/i)).toHaveValue('Jane Baptism');
     expect(document.getElementById('surname')).toHaveValue('Doe');
+  });
+
+  it('migrates legacy state-only draft payloads on Resume', async () => {
+    const user = userEvent.setup();
+    const draftKey = 'church_registry_offline_draft:baptism_create:10:admin';
+    const legacyRecord = {
+      draftId: 'baptism_create:10:admin',
+      id: 'baptism_create:10:admin',
+      formType: 'baptism_create',
+      updatedAt: Date.now(),
+      payload: {
+        form: {
+          baptismName: 'Legacy Jane',
+          otherNames: '',
+          surname: 'Doe',
+          gender: 'FEMALE',
+          dateOfBirth: '',
+          fathersName: 'John',
+          mothersName: 'Mary',
+          officiatingPriest: '',
+          placeOfBirth: 'Lagos',
+          placeOfBaptism: 'St Mary Church',
+          dateOfBaptism: '',
+        },
+        sponsors: [{ firstName: 'Peter', lastName: 'Doe' }],
+        parentAddressLine: '10 Main St',
+        parentAddressState: 'Lagos',
+      },
+    };
+    window.localStorage.setItem(draftKey, JSON.stringify(legacyRecord));
+
+    render(<BaptismCreatePage />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /resume draft/i })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /resume draft/i }));
+
+    expect(screen.getByLabelText(/parents address:/i)).toHaveValue('10 Main St');
+    expect(screen.getByLabelText(/^country/i)).toHaveValue('Nigeria');
+    expect(screen.getByLabelText(/state\/region/i)).toHaveValue('Lagos');
   });
 });
 

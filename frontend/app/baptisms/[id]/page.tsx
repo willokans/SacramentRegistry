@@ -388,7 +388,7 @@ export default function BaptismViewPage() {
             <dl className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-[auto_1fr]">
               <DetailRow label="Father" value={baptism.fathersName || '—'} />
               <DetailRow label="Mother" value={baptism.mothersName || '—'} />
-              <DetailRow label="Address" value={parentAddress || 'No address provided'} />
+              <DetailRow label="Parents Address" value={parentAddress || 'No address provided'} />
             </dl>
           </section>
 

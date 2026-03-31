@@ -202,7 +202,7 @@ export default function BaptismCertificatePage() {
               <div className="space-y-2.5">
                 <DataRow label="Father" value={baptism.fathersName || '—'} />
                 <DataRow label="Mother" value={baptism.mothersName || '—'} />
-                <DataRow label="Parents' address" value={baptism.parentAddress ?? baptism.address ?? '—'} />
+                <DataRow label="Parents Address" value={baptism.parentAddress ?? baptism.address ?? '—'} />
                 <DataRow label="Sponsors" value={baptism.sponsorNames || '—'} />
                 <DataRow label="Officiating Priest" value={baptism.officiatingPriest || '—'} />
               </div>
