@@ -65,6 +65,7 @@ describe('Baptism view page', () => {
       dateOfBirth: '2020-01-15',
       fathersName: 'James',
       mothersName: 'Mary',
+      parentAddress: 'No 12 Grace Street, Abuja',
       sponsorNames: 'Peter, Anne',
       officiatingPriest: 'Fr. Williams',
       parishId: 10,
@@ -90,6 +91,8 @@ describe('Baptism view page', () => {
     expect(within(main).getByText(/James/i)).toBeInTheDocument();
     expect(within(main).getByText(/Baptism Date/i)).toBeInTheDocument();
     expect(within(main).getByText(/^Mary$/)).toBeInTheDocument();
+    expect(within(main).getByText(/Parents Address/i)).toBeInTheDocument();
+    expect(within(main).getByText(/No 12 Grace Street, Abuja/i)).toBeInTheDocument();
     expect(within(main).getByText(/Peter, Anne/i)).toBeInTheDocument();
     expect(within(main).getByText(/Fr\. Williams/i)).toBeInTheDocument();
   });
