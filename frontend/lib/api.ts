@@ -39,14 +39,19 @@ export async function login(username: string, password: string) {
   return res.json();
 }
 
+const TOKEN_STORAGE_KEY = 'church_registry_token';
+const REFRESH_TOKEN_STORAGE_KEY = 'church_registry_refresh_token';
+const USER_STORAGE_KEY = 'church_registry_user';
+let refreshInFlight: Promise<boolean> | null = null;
+
 export function getStoredToken(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('church_registry_token');
+  return localStorage.getItem(TOKEN_STORAGE_KEY);
 }
 
 export function getStoredUser(): { username: string; displayName: string | null; role: string | null } | null {
   if (typeof window === 'undefined') return null;
-  const raw = localStorage.getItem('church_registry_user');
+  const raw = localStorage.getItem(USER_STORAGE_KEY);
   if (!raw) return null;
   try {
     return JSON.parse(raw);
@@ -56,15 +61,15 @@ export function getStoredUser(): { username: string; displayName: string | null;
 }
 
 export function storeAuth(token: string, refreshToken: string, user: { username: string; displayName: string | null; role: string | null }) {
-  localStorage.setItem('church_registry_token', token);
-  localStorage.setItem('church_registry_refresh_token', refreshToken);
-  localStorage.setItem('church_registry_user', JSON.stringify(user));
+  localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refreshToken);
+  localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
 }
 
 export function clearAuth() {
-  localStorage.removeItem('church_registry_token');
-  localStorage.removeItem('church_registry_refresh_token');
-  localStorage.removeItem('church_registry_user');
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+  localStorage.removeItem(USER_STORAGE_KEY);
 }
 
 /** Request password reset by email or username. Returns token (MVP: no email sent; share token with user). Uses Next.js proxy to avoid CORS. */
@@ -146,12 +151,23 @@ function getAuthHeaders(): HeadersInit {
 }
 
 /** Fetch with retry for transient failures on unstable connections (e.g. low-bandwidth). */
-async function fetchWithRetry(url: string, init?: RequestInit): Promise<Response> {
+async function fetchWithRetry(
+  url: string,
+  init?: RequestInit,
+  options?: { skipAuthRefresh?: boolean; didAuthRefresh?: boolean },
+): Promise<Response> {
   const maxRetries = 2;
   let lastError: Error | null = null;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const res = await fetch(url, init);
+      if (res.status === 401 && !options?.skipAuthRefresh && !options?.didAuthRefresh && shouldAttemptAuthRefresh(url)) {
+        const refreshed = await ensureFreshAccessToken();
+        if (refreshed) {
+          const retryInit = withLatestAuthHeader(init);
+          return fetchWithRetry(url, retryInit, { skipAuthRefresh: false, didAuthRefresh: true });
+        }
+      }
       if (res.ok) return res;
       if (res.status >= 500 && attempt < maxRetries) {
         await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 500));
@@ -168,6 +184,77 @@ async function fetchWithRetry(url: string, init?: RequestInit): Promise<Response
     }
   }
   throw lastError ?? new Error('Request failed');
+}
+
+function shouldAttemptAuthRefresh(url: string): boolean {
+  if (typeof window === 'undefined') return false;
+  const refreshToken = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+  if (!refreshToken) return false;
+  return !url.includes('/api/auth/login') && !url.includes('/api/auth/refresh') && !url.includes('/api/auth/logout');
+}
+
+async function ensureFreshAccessToken(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  if (refreshInFlight) return refreshInFlight;
+
+  const refreshToken = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+  if (!refreshToken) {
+    clearAuth();
+    return false;
+  }
+
+  refreshInFlight = (async () => {
+    try {
+      const res = await fetchWithRetry(
+        `${getBaseUrl()}/api/auth/refresh`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        },
+        { skipAuthRefresh: true },
+      );
+      if (!res.ok) {
+        clearAuth();
+        return false;
+      }
+      const payload = await res.json() as {
+        token?: string;
+        refreshToken?: string;
+        username?: string;
+        displayName?: string | null;
+        role?: string | null;
+      };
+      if (!payload.token || !payload.refreshToken) {
+        clearAuth();
+        return false;
+      }
+      const fallbackUser = getStoredUser();
+      const nextUser = {
+        username: payload.username ?? fallbackUser?.username ?? '',
+        displayName: payload.displayName ?? fallbackUser?.displayName ?? null,
+        role: payload.role ?? fallbackUser?.role ?? null,
+      };
+      storeAuth(payload.token, payload.refreshToken, nextUser);
+      return true;
+    } catch {
+      clearAuth();
+      return false;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+
+  return refreshInFlight;
+}
+
+function withLatestAuthHeader(init?: RequestInit): RequestInit | undefined {
+  if (!init) return init;
+  const token = getStoredToken();
+  if (!token) return init;
+  const headers = new Headers(init.headers ?? {});
+  headers.set('Authorization', `Bearer ${token}`);
+  return { ...init, headers };
 }
 
 /** Parse error response text; prefer 'error' or 'message' from JSON when present. */

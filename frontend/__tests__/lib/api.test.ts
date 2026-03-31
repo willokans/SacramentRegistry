@@ -3,6 +3,7 @@
  */
 import {
   createCommunionWithExternalBaptismPendingProof,
+  fetchDashboardCounts,
   fetchDioceseDashboard,
   getStoredDioceseId,
   setStoredDioceseId,
@@ -119,6 +120,131 @@ describe('fetchDioceseDashboard', () => {
     global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 403 });
 
     await expect(fetchDioceseDashboard(1)).rejects.toThrow('Failed to fetch diocese dashboard');
+  });
+
+  it('refreshes access token once on 401 and retries request', async () => {
+    const mockFetch = jest.fn()
+      .mockResolvedValueOnce({ ok: false, status: 401 })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            token: 'jwt-refreshed',
+            refreshToken: 'refresh-refreshed',
+            username: 'admin',
+            displayName: 'Admin',
+            role: 'ADMIN',
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockDioceseDashboard),
+      });
+    global.fetch = mockFetch;
+    localStorage.setItem('church_registry_refresh_token', 'refresh-original');
+    localStorage.setItem(
+      'church_registry_user',
+      JSON.stringify({ username: 'admin', displayName: 'Admin', role: 'ADMIN' }),
+    );
+
+    const result = await fetchDioceseDashboard(1);
+
+    expect(result).toEqual(mockDioceseDashboard);
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:8080/api/auth/refresh',
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    );
+    expect(localStorage.getItem('church_registry_token')).toBe('jwt-refreshed');
+    expect(localStorage.getItem('church_registry_refresh_token')).toBe('refresh-refreshed');
+  });
+
+  it('clears auth and throws Unauthorized when refresh fails', async () => {
+    const mockFetch = jest.fn()
+      .mockResolvedValueOnce({ ok: false, status: 401 })
+      .mockResolvedValueOnce({ ok: false, status: 401 });
+    global.fetch = mockFetch;
+    localStorage.setItem('church_registry_refresh_token', 'refresh-original');
+    localStorage.setItem(
+      'church_registry_user',
+      JSON.stringify({ username: 'admin', displayName: 'Admin', role: 'ADMIN' }),
+    );
+
+    await expect(fetchDioceseDashboard(1)).rejects.toThrow('Unauthorized');
+    expect(localStorage.getItem('church_registry_token')).toBeNull();
+    expect(localStorage.getItem('church_registry_refresh_token')).toBeNull();
+    expect(localStorage.getItem('church_registry_user')).toBeNull();
+  });
+
+  it('uses single-flight refresh when multiple requests get 401 concurrently', async () => {
+    const delayedRefresh = new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              token: 'jwt-refreshed',
+              refreshToken: 'refresh-refreshed',
+              username: 'admin',
+              displayName: 'Admin',
+              role: 'ADMIN',
+            }),
+        });
+      }, 10);
+    });
+
+    let dioceseAttempts = 0;
+    let parishAttempts = 0;
+    const mockFetch = jest.fn((url: string) => {
+      if (url.endsWith('/api/dioceses/1/dashboard')) {
+        dioceseAttempts += 1;
+        if (dioceseAttempts === 1) return Promise.resolve({ ok: false, status: 401 });
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockDioceseDashboard),
+        });
+      }
+      if (url.endsWith('/api/parishes/10/dashboard-counts')) {
+        parishAttempts += 1;
+        if (parishAttempts === 1) return Promise.resolve({ ok: false, status: 401 });
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              baptisms: 1,
+              communions: 2,
+              confirmations: 3,
+              marriages: 4,
+              holyOrders: 5,
+            }),
+        });
+      }
+      if (url.endsWith('/api/auth/refresh')) {
+        return delayedRefresh;
+      }
+      return Promise.resolve({ ok: false, status: 500 });
+    });
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    localStorage.setItem('church_registry_refresh_token', 'refresh-original');
+    localStorage.setItem(
+      'church_registry_user',
+      JSON.stringify({ username: 'admin', displayName: 'Admin', role: 'ADMIN' }),
+    );
+
+    const [dashboard, counts] = await Promise.all([
+      fetchDioceseDashboard(1),
+      fetchDashboardCounts(10),
+    ]);
+
+    expect(dashboard.counts.baptisms).toBe(150);
+    expect(counts.baptisms).toBe(1);
+    const refreshCalls = (mockFetch as jest.Mock).mock.calls.filter(
+      ([url]) => typeof url === 'string' && url.endsWith('/api/auth/refresh'),
+    );
+    expect(refreshCalls).toHaveLength(1);
   });
 });
 
