@@ -30,4 +30,8 @@ module.exports = withSentryConfig(nextConfig, {
   silent: true,
   // Upload a broader set of source maps in production for better stack traces.
   widenClientFileUpload: true,
+  // Source map upload settings (enabled when auth token is provided in build env).
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
 });
