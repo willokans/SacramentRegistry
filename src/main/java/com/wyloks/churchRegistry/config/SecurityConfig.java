@@ -50,6 +50,7 @@ public class SecurityConfig {
                         }))
                 .authorizeHttpRequests(a -> a
                         .requestMatchers("/api/health").permitAll()
+                        .requestMatchers("/api/health/sentry-test").permitAll()
                         .requestMatchers("/error").permitAll()
                         .requestMatchers("/api/auth/login", "/api/auth/refresh", "/api/auth/logout",
                         "/api/auth/forgot-password", "/api/auth/reset-password-by-token").permitAll()

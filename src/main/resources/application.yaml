@@ -52,6 +52,9 @@ app:
     api:
       limit: 300
       period-minutes: 1
+  sentry-test-endpoint:
+    enabled: ${SENTRY_TEST_ENDPOINT_ENABLED:false}
+    key: ${SENTRY_TEST_ENDPOINT_KEY:}
 
 sentry:
   dsn: ${SENTRY_DSN:}
