@@ -31,7 +31,16 @@ databaseChangeLog:
 
               CREATE UNIQUE INDEX IF NOT EXISTS uidx_baptism_document_version_storage_path
                 ON baptism_document_version(storage_path);
-
+  - changeSet:
+      id: 2
+      author: will_okanumeh
+      preConditions:
+        - onFail: MARK_RAN
+        - dbms:
+            type: postgresql
+      changes:
+        - sql:
+            sql: |
               CREATE UNIQUE INDEX IF NOT EXISTS uidx_baptism_document_version_current
                 ON baptism_document_version(baptism_id, document_type)
                 WHERE is_current = TRUE;
