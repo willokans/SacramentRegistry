@@ -522,7 +522,7 @@ describe('Baptism view page birth certificate card', () => {
     expect(screen.getByText(/no birth certificate uploaded yet/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /choose file/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /upload certificate/i })).toBeDisabled();
-    expect(screen.getByText(/no versions available yet/i)).toBeInTheDocument();
+    expect(await screen.findByText(/no versions available yet/i)).toBeInTheDocument();
   });
 
   it('uploads replacement and refreshes version history', async () => {
