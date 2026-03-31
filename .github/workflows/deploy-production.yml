@@ -86,6 +86,8 @@ jobs:
           SUPABASE_URL_PROD: ${{ secrets.SUPABASE_URL_PROD }}
           API_SENTRY_DSN_PROD: ${{ secrets.API_SENTRY_DSN_PROD }}
           SENTRY_RELEASE_PROD: ${{ secrets.SENTRY_RELEASE_PROD }}
+          API_SENTRY_TEST_ENDPOINT_ENABLED_PROD: ${{ secrets.API_SENTRY_TEST_ENDPOINT_ENABLED_PROD }}
+          API_SENTRY_TEST_ENDPOINT_KEY_PROD: ${{ secrets.API_SENTRY_TEST_ENDPOINT_KEY_PROD }}
         run: |
           set -euo pipefail
           APP_NAME="church-registry-api"
@@ -125,6 +127,12 @@ jobs:
             printf 'SENTRY_RELEASE=%s\n' "${SENTRY_RELEASE_PROD:-$GITHUB_SHA}"
             if [ -n "${API_SENTRY_DSN_PROD:-}" ]; then
               printf 'SENTRY_DSN=%s\n' "$(printf '%s' "$API_SENTRY_DSN_PROD" | tr -d '\n')"
+            fi
+            if [ -n "${API_SENTRY_TEST_ENDPOINT_ENABLED_PROD:-}" ]; then
+              printf 'SENTRY_TEST_ENDPOINT_ENABLED=%s\n' "$(printf '%s' "$API_SENTRY_TEST_ENDPOINT_ENABLED_PROD" | tr -d '\n')"
+            fi
+            if [ -n "${API_SENTRY_TEST_ENDPOINT_KEY_PROD:-}" ]; then
+              printf 'SENTRY_TEST_ENDPOINT_KEY=%s\n' "$(printf '%s' "$API_SENTRY_TEST_ENDPOINT_KEY_PROD" | tr -d '\n')"
             fi
             if [ -n "${SUPABASE_URL_PROD:-}" ]; then
               printf 'SUPABASE_URL=%s\n' "$(printf '%s' "$SUPABASE_URL_PROD" | tr -d '\n')"

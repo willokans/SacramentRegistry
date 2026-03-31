@@ -171,6 +171,8 @@ Use `.github/workflows/deploy-production.yml` (trigger: `push` to `main`). Requi
 | `WEB_SENTRY_DSN_PROD` | Frontend/browser Sentry DSN |
 | `SENTRY_ENVIRONMENT_PROD` | `production` |
 | `SENTRY_RELEASE_PROD` | Release identifier (for example Git SHA) |
+| `API_SENTRY_TEST_ENDPOINT_ENABLED_PROD` | Optional toggle for backend `/api/health/sentry-test` endpoint (`true`/`false`) |
+| `API_SENTRY_TEST_ENDPOINT_KEY_PROD` | Optional shared key for backend Sentry test endpoint (`X-Sentry-Test-Key`) |
 | `WEB_SENTRY_AUTH_TOKEN_PROD` | Sentry auth token for frontend source-map upload (optional, recommended) |
 | `SENTRY_ORG_PROD` | Sentry org slug for source-map upload (optional; defaults to `httpswwwwylokscom`) |
 | `SENTRY_PROJECT_FRONTEND_PROD` | Sentry frontend project slug for source-map upload (optional; defaults to `frontendsacramentregistry`) |
