@@ -36,6 +36,7 @@ The frontend is UI-only and does not fall back to same-origin Next route handler
 Set these environment variables in staging/production:
 
 - `NEXT_PUBLIC_SENTRY_DSN` (browser SDK)
+- `NEXT_PUBLIC_SENTRY_ENVIRONMENT` (`staging`, `production`, etc. for browser events)
 - `SENTRY_DSN` (server/edge SDK, can match public DSN)
 - `SENTRY_ENVIRONMENT` (`staging`, `production`, etc.)
 - `SENTRY_RELEASE` (for example, the Git SHA used for deploy)
