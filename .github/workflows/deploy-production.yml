@@ -254,6 +254,7 @@ jobs:
             printf 'NEXT_PUBLIC_SUPABASE_URL=%s\n' "$(printf '%s' "$SUPABASE_URL_RESOLVED" | tr -d '\n')"
             printf 'SUPABASE_SERVICE_ROLE_KEY=%s\n' "$SUPABASE_SERVICE_ROLE_KEY_PROD"
             printf 'SENTRY_ENVIRONMENT=%s\n' "production"
+            printf 'NEXT_PUBLIC_SENTRY_ENVIRONMENT=%s\n' "production"
             printf 'SENTRY_RELEASE=%s\n' "${SENTRY_RELEASE_PROD:-$GITHUB_SHA}"
             if [ -n "${WEB_SENTRY_DSN_PROD:-}" ]; then
               printf 'NEXT_PUBLIC_SENTRY_DSN=%s\n' "$(printf '%s' "$WEB_SENTRY_DSN_PROD" | tr -d '\n')"

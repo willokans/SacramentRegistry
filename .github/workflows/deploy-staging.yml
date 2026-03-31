@@ -180,6 +180,7 @@ jobs:
           flyctl secrets set \
             NEXT_PUBLIC_API_URL="$FRONTEND_API_URL" \
             SENTRY_ENVIRONMENT="staging" \
+            NEXT_PUBLIC_SENTRY_ENVIRONMENT="staging" \
             SENTRY_RELEASE="${SENTRY_RELEASE:-$GITHUB_SHA}" \
             --stage \
             --app "$FRONTEND_APP"
