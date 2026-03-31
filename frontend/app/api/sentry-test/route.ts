@@ -1,6 +1,8 @@
 import * as Sentry from '@sentry/nextjs';
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 const isSentryTestApiEnabled = () =>
   process.env.NODE_ENV !== 'production' || process.env.ENABLE_SENTRY_TEST_PAGE === 'true';
 
