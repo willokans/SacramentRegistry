@@ -281,7 +281,10 @@ jobs:
             --build-arg NEXT_PUBLIC_SENTRY_DSN="$(printf '%s' "${WEB_SENTRY_DSN_PROD:-}" | tr -d '\n')" \
             --build-arg NEXT_PUBLIC_SENTRY_ENVIRONMENT="production" \
             --build-arg NEXT_PUBLIC_SENTRY_RELEASE="${SENTRY_RELEASE_PROD:-$GITHUB_SHA}" \
-            --build-arg NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE="${NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE_PROD:-0}"
+            --build-arg NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE="${NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE_PROD:-0}" \
+            --build-arg SENTRY_AUTH_TOKEN="$(printf '%s' "${WEB_SENTRY_AUTH_TOKEN_PROD:-}" | tr -d '\n')" \
+            --build-arg SENTRY_ORG="${SENTRY_ORG_PROD:-httpswwwwylokscom}" \
+            --build-arg SENTRY_PROJECT="${SENTRY_PROJECT_FRONTEND_PROD:-frontendsacramentregistry}"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_PROD || secrets.FLY_API_TOKEN }}
           FLY_ACCESS_TOKEN: ${{ secrets.FLY_API_TOKEN_PROD || secrets.FLY_API_TOKEN }}
@@ -289,3 +292,6 @@ jobs:
           WEB_SENTRY_DSN_PROD: ${{ secrets.WEB_SENTRY_DSN_PROD }}
           SENTRY_RELEASE_PROD: ${{ secrets.SENTRY_RELEASE_PROD }}
           NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE_PROD: ${{ secrets.NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE_PROD }}
+          WEB_SENTRY_AUTH_TOKEN_PROD: ${{ secrets.WEB_SENTRY_AUTH_TOKEN_PROD }}
+          SENTRY_ORG_PROD: ${{ secrets.SENTRY_ORG_PROD }}
+          SENTRY_PROJECT_FRONTEND_PROD: ${{ secrets.SENTRY_PROJECT_FRONTEND_PROD }}
