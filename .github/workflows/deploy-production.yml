@@ -221,6 +221,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY_PROD: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY_PROD }}
           WEB_SENTRY_DSN_PROD: ${{ secrets.WEB_SENTRY_DSN_PROD }}
           SENTRY_RELEASE_PROD: ${{ secrets.SENTRY_RELEASE_PROD }}
+          ENABLE_SENTRY_TEST_PAGE_PROD: ${{ secrets.ENABLE_SENTRY_TEST_PAGE_PROD }}
         run: |
           set -euo pipefail
           FRONTEND_API_URL="${NEXT_PUBLIC_API_URL_PROD:-https://church-registry-api.fly.dev}"
@@ -257,6 +258,9 @@ jobs:
             if [ -n "${WEB_SENTRY_DSN_PROD:-}" ]; then
               printf 'NEXT_PUBLIC_SENTRY_DSN=%s\n' "$(printf '%s' "$WEB_SENTRY_DSN_PROD" | tr -d '\n')"
               printf 'SENTRY_DSN=%s\n' "$(printf '%s' "$WEB_SENTRY_DSN_PROD" | tr -d '\n')"
+            fi
+            if [ -n "${ENABLE_SENTRY_TEST_PAGE_PROD:-}" ]; then
+              printf 'ENABLE_SENTRY_TEST_PAGE=%s\n' "$(printf '%s' "$ENABLE_SENTRY_TEST_PAGE_PROD" | tr -d '\n')"
             fi
           } > "$SECRETS_IMPORT"
           flyctl secrets import --stage --app church-registry < "$SECRETS_IMPORT"
