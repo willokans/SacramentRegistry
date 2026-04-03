@@ -109,6 +109,7 @@ const features = [
 ];
 
 const supportEmail = 'support@sacramentregistry.com';
+const infoEmail = 'info@sacramentregistry.com';
 const requestAccessEmail = supportEmail;
 const requestAccessTargets = {
   mailto: `mailto:${requestAccessEmail}?subject=Request%20Access%20for%20Parish`,
@@ -436,8 +437,8 @@ export default function LandingPage() {
           </div>
           <p className="mt-3 text-xs sm:text-sm text-gray-500">
             Or email us directly at{' '}
-            <a href={`mailto:${supportEmail}`} className="font-medium text-gray-600 hover:text-sancta-maroon underline underline-offset-2">
-              {supportEmail}
+            <a href={`mailto:${infoEmail}`} className="font-medium text-gray-600 hover:text-sancta-maroon underline underline-offset-2">
+              {infoEmail}
             </a>
           </p>
         </div>
@@ -473,8 +474,6 @@ export default function LandingPage() {
               Documentation
             </a>
           </div>
-
-          <p className="mt-6 text-sm text-gray-500">Support: {supportEmail}</p>
         </div>
       </footer>
     </div>

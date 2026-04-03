@@ -69,7 +69,7 @@ describe('Landing page (home)', () => {
     expect(screen.getByText(/secure, parish-approved onboarding/i)).toBeInTheDocument();
     expect(screen.getByText(/Contact your parish office or write to support for access guidance/i)).toBeInTheDocument();
     expect(screen.getByText(/Or email us directly at/i)).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'support@sacramentregistry.com' })[0]).toHaveAttribute('href', 'mailto:support@sacramentregistry.com');
+    expect(screen.getAllByRole('link', { name: 'info@sacramentregistry.com' })[0]).toHaveAttribute('href', 'mailto:info@sacramentregistry.com');
     expect(screen.getByText(/Replace manual registers and scattered records with a structured, reliable system/i)).toBeInTheDocument();
     expect(screen.getByText(/Designed with input from parish priests and real parish workflows/i)).toBeInTheDocument();
     expect(screen.getByText(/Built specifically for Catholic parish and diocesan sacrament record-keeping/i)).toBeInTheDocument();
@@ -106,6 +106,7 @@ describe('Landing page (home)', () => {
     render(<LandingPage />);
     expect(document.body).toHaveTextContent('Sacrament Registry');
     expect(document.body).toHaveTextContent(/Sacramental Record Management System/i);
+    expect(document.body).not.toHaveTextContent(/Support: support@sacramentregistry.com/i);
 
     const privacyLink = screen.getByRole('link', { name: 'Privacy Notice' });
     expect(privacyLink).toHaveAttribute('href', '/privacy');
@@ -134,6 +135,15 @@ describe('Landing page (home)', () => {
     });
 
     expect(requestAccessLinks[0]).toHaveAttribute('href', requestAccessHref);
+  });
+
+  it('shows secondary direct-email option with info mailbox', () => {
+    render(<LandingPage />);
+
+    expect(screen.getByText(/Or email us directly at/i)).toBeInTheDocument();
+    const infoEmailLinks = screen.getAllByRole('link', { name: 'info@sacramentregistry.com' });
+    expect(infoEmailLinks.length).toBeGreaterThan(0);
+    expect(infoEmailLinks[0]).toHaveAttribute('href', 'mailto:info@sacramentregistry.com');
   });
 
   it('when authenticated redirects to /dashboard', async () => {
