@@ -8,14 +8,40 @@ type NoticeSection = {
   paragraphs?: string[];
 };
 
+const INFO_EMAIL = 'info@sacramentregistry.com';
+const lastUpdated = new Date().toISOString().slice(0, 10);
+
+function renderWithEmailCta(text: string) {
+  const normalizedText = text.replaceAll(`[${INFO_EMAIL}]`, INFO_EMAIL);
+
+  if (!normalizedText.includes(INFO_EMAIL)) {
+    return normalizedText;
+  }
+
+  return normalizedText.split(INFO_EMAIL).map((part, index, parts) => {
+    if (index === parts.length - 1) {
+      return part;
+    }
+
+    return (
+      <span key={`${part}-${index}`}>
+        {part}
+        <a href={`mailto:${INFO_EMAIL}`} className="font-medium text-sancta-maroon hover:underline">
+          {INFO_EMAIL}
+        </a>
+      </span>
+    );
+  });
+}
+
 const NOTICE_SECTIONS: NoticeSection[] = [
   {
     id: 'who-we-are',
     title: '1) Who We Are',
     paragraphs: [
-      'SacramentRegistry is a UK-registered technology company that designs and delivers IT solutions.',
-      'We develop, operate, and support the Church Registry platform.',
-      'For privacy enquiries, contact: support@sacramentregistry.com.',
+      'Sacrament Registry is a UK-registered technology company that designs and delivers IT solutions.',
+      'We develop, operate, and support the Sacrament Registry platform.',
+      'For privacy enquiries, contact: info@sacramentregistry.com.',
     ],
   },
   {
@@ -45,7 +71,7 @@ const NOTICE_SECTIONS: NoticeSection[] = [
   {
     id: 'legal-basis',
     title: '4) Legal Basis',
-    intro: 'Where required under NDPA, processing is based on one or more of:',
+    intro: 'Where required under applicable data protection laws (including NDPA, GDPR, and similar regulations), processing is based on one or more of:',
     bullets: [
       'provision of requested services',
       'compliance with legal obligations',
@@ -68,7 +94,8 @@ const NOTICE_SECTIONS: NoticeSection[] = [
     id: 'international-transfers',
     title: '6) International Data Transfers',
     paragraphs: [
-      'If data is processed outside Nigeria, we apply contractual and technical safeguards consistent with NDPA requirements and NDPC guidance.',
+      'If personal data is transferred internationally, we apply appropriate safeguards to protect it in transit and at destination, including contractual, organizational, and technical measures required by applicable law.',
+      'If data is processed outside the data country of origin, we apply safeguards consistent with NDPA requirements and NDPC guidance, alongside equivalent protections expected under other applicable frameworks.',
     ],
   },
   {
@@ -84,13 +111,13 @@ const NOTICE_SECTIONS: NoticeSection[] = [
     id: 'retention',
     title: '7) Retention',
     paragraphs: [
-      'We retain personal data only for as long as necessary to fulfill operational, legal, audit, and ecclesiastical obligations. For detailed internal retention controls, contact the privacy team at [privacy@yourdomain.com].',
+      'We retain personal data only for as long as necessary to fulfill operational, legal, audit, and ecclesiastical obligations.',
     ],
   },
   {
     id: 'your-rights',
     title: '8) Your Rights',
-    intro: 'Subject to NDPA and applicable legal limits, you may request:',
+    intro: 'Depending on your location and applicable law, and subject to legal limits, you may request:',
     bullets: [
       'access to your personal data',
       'correction of inaccurate data',
@@ -104,7 +131,7 @@ const NOTICE_SECTIONS: NoticeSection[] = [
     id: 'submit-request',
     title: '9) How to Submit a Request',
     paragraphs: [
-      'To submit a privacy or data rights request, contact [support@sacramentregistry.com] or use [DSR form URL].',
+      'To submit a privacy or data rights request, contact [info@sacramentregistry.com].',
       'We may ask for identity verification before completing your request. We aim to acknowledge requests promptly and respond within applicable legal timeframes.',
     ],
   },
@@ -119,8 +146,8 @@ const NOTICE_SECTIONS: NoticeSection[] = [
     id: 'complaints',
     title: '11) Complaints',
     paragraphs: [
-      'If you have concerns about how your data is handled, contact us at [support@sacramentregistry.com].',
-      'You may also lodge a complaint with the Nigeria Data Protection Commission (NDPC) where applicable.',
+      'If you have concerns about how your data is handled, contact us at [info@sacramentregistry.com].',
+      'You may also lodge a complaint with your local or national data protection authority where applicable.',
     ],
   },
   {
@@ -140,12 +167,19 @@ export default function PrivacyNoticePage() {
           <h1 className="text-2xl sm:text-3xl font-serif font-semibold text-sancta-maroon">
             Privacy Notice
           </h1>
-          <p className="mt-2 text-sm text-gray-600">Last updated: [2026-03-30]</p>
+          <p className="mt-2 text-sm text-gray-600">Last updated: {lastUpdated}</p>
           <p className="mt-4 text-sm sm:text-base text-gray-700 leading-relaxed">
-            This Privacy Notice explains how we collect, use, share, and protect personal data in the Church Registry platform. It is intended for parish users, administrators, and individuals whose sacramental records are managed through this service.
+            This Privacy Notice explains how we collect, use, share, and protect personal data in the Sacrament Registry platform. It is intended for parish users, administrators, and individuals whose sacramental records are managed through this service.
+          </p>
+          <p className="mt-3 text-sm sm:text-base text-gray-700 leading-relaxed">
+            Prefer a plain-language trust overview first?{' '}
+            <Link href="/data-protection" className="font-medium text-sancta-maroon hover:underline">
+              Visit Data Protection &amp; Trust
+            </Link>
+            .
           </p>
           <p className="mt-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm sm:text-base font-semibold text-amber-900">
-            All data belongs to your parish/diocese. SacramentRegistry is only a processor.
+            All data belongs to your parish/diocese. Sacrament Registry is only a processor.
           </p>
         </header>
 
@@ -156,29 +190,29 @@ export default function PrivacyNoticePage() {
             </h2>
             {section.intro && (
               <p className="mt-3 text-sm sm:text-base text-gray-700 leading-relaxed">
-                {section.intro}
+                {renderWithEmailCta(section.intro)}
               </p>
             )}
             {section.bullets && (
               <ul className="mt-3 list-disc space-y-1 pl-5 text-sm sm:text-base text-gray-700 leading-relaxed">
                 {section.bullets.map((item) => (
-                  <li key={item}>{item}</li>
+                  <li key={item}>{renderWithEmailCta(item)}</li>
                 ))}
               </ul>
             )}
             {section.paragraphs?.map((paragraph) => (
               <p key={paragraph} className="mt-3 text-sm sm:text-base text-gray-700 leading-relaxed">
-                {paragraph}
+                {renderWithEmailCta(paragraph)}
               </p>
             ))}
           </section>
         ))}
 
         <footer className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <p className="text-sm text-gray-600 leading-relaxed">
-            This page is derived from the policy source in <code className="font-mono">docs/PRIVACY_NOTICE.md</code>. Replace bracketed placeholder values with your organization details before publishing to production.
-          </p>
           <div className="mt-4 flex flex-wrap gap-4 text-sm">
+            <Link href="/data-protection" className="font-medium text-sancta-maroon hover:underline">
+              Prefer trust-first summary? Data Protection &amp; Trust
+            </Link>
             <Link href="/login" className="font-medium text-sancta-maroon hover:underline">
               Go to Login
             </Link>

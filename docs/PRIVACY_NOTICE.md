@@ -33,7 +33,7 @@ We process personal data to:
 
 ## 4) Legal Basis
 
-Where required under NDPA, processing is based on one or more of:
+Where required under applicable data protection laws (including NDPA, GDPR, and similar regulations), processing is based on one or more of:
 
 - provision of requested services
 - compliance with legal obligations
@@ -52,7 +52,9 @@ We do not sell personal data.
 
 ## 6) International Data Transfers
 
-If data is processed outside Nigeria, we apply contractual and technical safeguards consistent with NDPA requirements and NDPC guidance.
+If personal data is transferred internationally, we apply appropriate safeguards to protect it in transit and at destination, including contractual, organizational, and technical measures required by applicable law.
+
+If data is processed outside Nigeria, we apply safeguards consistent with NDPA requirements and NDPC guidance, alongside equivalent protections expected under other applicable frameworks.
 
 ### Data Location Transparency
 
@@ -66,7 +68,7 @@ We retain personal data only for as long as necessary to fulfill operational, le
 
 ## 8) Your Rights
 
-Subject to NDPA and applicable legal limits, you may request:
+Depending on your location and applicable law, and subject to legal limits, you may request:
 
 - access to your personal data
 - correction of inaccurate data
@@ -89,7 +91,7 @@ We apply technical and organizational measures to protect personal data, includi
 
 If you have concerns about how your data is handled, contact us at `[support@sacramentregistry.com]`.
 
-You may also lodge a complaint with the Nigeria Data Protection Commission (NDPC) where applicable.
+You may also lodge a complaint with your local or national data protection authority, such as the Nigeria Data Protection Commission (NDPC), where applicable.
 
 ## 12) Changes to This Notice
 

@@ -461,6 +461,9 @@ export default function LandingPage() {
             <Link href={ctaLinks.signIn} className="text-sm font-medium text-sancta-maroon hover:underline">
               Sign in
             </Link>
+            <CtaLink href="/data-protection" className="text-sm font-medium text-sancta-maroon hover:underline">
+              Data Protection & Trust
+            </CtaLink>
             <CtaLink href="/privacy" className="text-sm font-medium text-sancta-maroon hover:underline">
               Privacy Notice
             </CtaLink>
