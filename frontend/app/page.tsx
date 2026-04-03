@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -82,30 +82,84 @@ function CloseIcon({ className }: { className?: string }) {
 
 const features = [
   {
-    title: 'Register Sacraments',
-    description: 'Record baptisms, confirmations, marriages, holy communion, and holy orders in a secure, structured format.',
+    title: 'Structured Sacrament Records',
+    description: 'Capture baptisms, confirmations, marriages, holy communion, and holy orders in a consistent parish-friendly format.',
     Icon: ChaliceIcon,
   },
   {
-    title: 'Search Parish Records',
-    description: 'Quickly find records by name, address, parents, or sacrament type.',
+    title: 'Find Records in Seconds',
+    description: 'Find records quickly by family name, parents, address, date, or sacrament type during office hours.',
     Icon: SearchIcon,
   },
   {
-    title: 'Generate Certificates',
-    description: 'Automatically generate official sacramental certificates with one click.',
+    title: 'Certificate Ready',
+    description: 'Generate official sacramental certificates from existing records without retyping details.',
     Icon: CertificateIcon,
   },
   {
-    title: 'Multi-Parish Access',
-    description: 'Records are organized by diocese and parish with secure access control.',
+    title: 'Parish-Controlled Access',
+    description: 'Each parish controls who can view and update records with secure invitation-only account setup.',
     Icon: ChurchIcon,
   },
   {
-    title: 'Installable App for Reliable Access',
-    description: 'Add the app to your home screen for quick access. Your entries will stay saved, even if your internet is slow or temporarily unavailable.',
+    title: 'Works Even Without Internet',
+    description: 'Installable web app support keeps entries safe when internet is slow, unstable, or temporarily unavailable.',
     Icon: PwaIcon,
   },
+];
+
+const supportEmail = 'support@sacramentregistry.com';
+const requestAccessEmail = supportEmail;
+const requestAccessTargets = {
+  mailto: `mailto:${requestAccessEmail}?subject=Request%20Access%20for%20Parish`,
+  route: '/request-access',
+} as const;
+
+const requestAccessTarget: keyof typeof requestAccessTargets = 'mailto';
+
+const ctaLinks = {
+  signIn: '/login',
+  requestAccess: requestAccessTargets[requestAccessTarget],
+};
+
+function CtaLink({
+  href,
+  children,
+  className,
+  onClick,
+}: {
+  href: string;
+  children: ReactNode;
+  className: string;
+  onClick?: () => void;
+}) {
+  const isExternal = href.startsWith('mailto:') || href.startsWith('http://') || href.startsWith('https://');
+
+  if (isExternal) {
+    return (
+      <a href={href} onClick={onClick} className={className}>
+        {children}
+      </a>
+    );
+  }
+
+  return (
+    <Link href={href} onClick={onClick} className={className}>
+      {children}
+    </Link>
+  );
+}
+
+const whyRegistry = [
+  'Replace manual registers and scattered records with a structured, reliable system.',
+  'Built specifically for Catholic parish and diocesan sacrament record-keeping.',
+  'Find, verify, and prepare records quickly for certificates and future sacraments.',
+];
+
+const howItWorks = [
+  'Your parish requests access and receives invitation-only onboarding.',
+  'Approved parish users sign in and begin entering or organizing sacramental records.',
+  'Teams search records, generate certificates, and continue working even with unreliable internet.',
 ];
 
 function DashboardPreview() {
@@ -142,14 +196,23 @@ export default function LandingPage() {
 
   const navLinks = (
     <>
+      <a href="#why" onClick={closeMobileMenu} className="text-sm font-medium text-gray-600 hover:text-sancta-maroon transition-colors py-2">
+        Why
+      </a>
       <a href="#features" onClick={closeMobileMenu} className="text-sm font-medium text-gray-600 hover:text-sancta-maroon transition-colors py-2">
         Features
+      </a>
+      <a href="#offline" onClick={closeMobileMenu} className="text-sm font-medium text-gray-600 hover:text-sancta-maroon transition-colors py-2">
+        Offline
       </a>
       <a href="#how-it-works" onClick={closeMobileMenu} className="text-sm font-medium text-gray-600 hover:text-sancta-maroon transition-colors py-2">
         How it works
       </a>
+      <a href="#access" onClick={closeMobileMenu} className="text-sm font-medium text-gray-600 hover:text-sancta-maroon transition-colors py-2">
+        Access
+      </a>
       <Link
-        href="/login"
+        href={ctaLinks.signIn}
         onClick={closeMobileMenu}
         className="rounded-lg bg-sancta-maroon px-4 py-2.5 text-sm font-medium text-white hover:bg-sancta-maroon-dark transition-colors min-h-[44px] inline-flex items-center justify-center"
       >
@@ -165,7 +228,10 @@ export default function LandingPage() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:py-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2 min-w-0">
             <CrossIcon className="h-7 w-7 sm:h-8 sm:w-8 text-sancta-gold shrink-0" />
-            <span className="font-serif text-lg sm:text-xl font-semibold text-sancta-maroon truncate">Sacrament Registry</span>
+            <div className="min-w-0">
+              <span className="block font-serif text-lg sm:text-xl font-semibold text-sancta-maroon truncate">Sacrament Registry</span>
+              <span className="hidden sm:block text-xs text-gray-500 truncate">Designed for Catholic parish workflows</span>
+            </div>
           </Link>
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-6">
@@ -185,14 +251,23 @@ export default function LandingPage() {
         {/* Mobile nav dropdown */}
         {mobileMenuOpen && (
           <nav className="md:hidden border-t border-gray-200/80 bg-white px-4 py-4 flex flex-col gap-1">
+            <a href="#why" onClick={closeMobileMenu} className="py-3 text-base font-medium text-gray-600 hover:text-sancta-maroon transition-colors">
+              Why
+            </a>
             <a href="#features" onClick={closeMobileMenu} className="py-3 text-base font-medium text-gray-600 hover:text-sancta-maroon transition-colors">
               Features
+            </a>
+            <a href="#offline" onClick={closeMobileMenu} className="py-3 text-base font-medium text-gray-600 hover:text-sancta-maroon transition-colors">
+              Offline
             </a>
             <a href="#how-it-works" onClick={closeMobileMenu} className="py-3 text-base font-medium text-gray-600 hover:text-sancta-maroon transition-colors">
               How it works
             </a>
+            <a href="#access" onClick={closeMobileMenu} className="py-3 text-base font-medium text-gray-600 hover:text-sancta-maroon transition-colors">
+              Access
+            </a>
             <Link
-              href="/login"
+              href={ctaLinks.signIn}
               onClick={closeMobileMenu}
               className="mt-2 rounded-lg bg-sancta-maroon px-4 py-3.5 text-base font-medium text-white hover:bg-sancta-maroon-dark transition-colors min-h-[44px] flex items-center justify-center"
             >
@@ -206,25 +281,28 @@ export default function LandingPage() {
       <section className="flex-1 px-4 py-10 sm:px-6 sm:py-16 md:py-24">
         <div className="mx-auto max-w-6xl flex flex-col lg:flex-row items-center gap-8 sm:gap-12 lg:gap-16">
           <div className="flex-1 text-left min-w-0">
+            <div className="inline-flex items-center rounded-full border border-sancta-gold/40 bg-sancta-gold/10 px-3 py-1 text-xs font-medium text-sancta-maroon">
+              Works even when internet is slow or unavailable
+            </div>
             <h1 className="font-serif text-2xl font-semibold text-sancta-maroon sm:text-3xl md:text-4xl lg:text-5xl leading-tight">
-              Sacramental Record Management for Catholic Parishes
+              Sacramental Records - Even Without Internet
             </h1>
             <p className="mt-3 sm:mt-4 text-base text-gray-600 sm:text-lg md:text-xl">
-              Sacrament Registry helps priests and parish staff securely manage baptism, communion, confirmation, marriage, and holy orders records.
+              Keep sacramental records accurate, searchable, and parish-controlled, without slowing ministry work.
             </p>
             <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:gap-4">
               <Link
-                href="/login"
+                href={ctaLinks.signIn}
                 className="inline-flex items-center justify-center rounded-lg bg-sancta-maroon px-6 py-3.5 text-base font-medium text-white hover:bg-sancta-maroon-dark transition-colors min-h-[44px] w-full sm:w-auto"
               >
                 Sign in
               </Link>
-              <a
-                href="#features"
+              <CtaLink
+                href={ctaLinks.requestAccess}
                 className="inline-flex items-center justify-center rounded-lg border-2 border-sancta-maroon bg-white px-6 py-3.5 text-base font-medium text-sancta-maroon hover:bg-sancta-maroon/5 transition-colors min-h-[44px] w-full sm:w-auto"
               >
-                Learn more
-              </a>
+                Request Access for Your Parish
+              </CtaLink>
             </div>
           </div>
           <div className="flex-1 flex justify-center lg:justify-end w-full">
@@ -233,11 +311,48 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Supporting visual text */}
+      <section className="border-t border-gray-200/80 bg-white/80 px-4 py-10 sm:px-6 sm:py-14">
+        <div className="mx-auto max-w-6xl grid gap-4 sm:gap-6 sm:grid-cols-3">
+          <div className="rounded-xl border border-gray-200 bg-white p-5">
+            <p className="text-sm font-semibold text-sancta-maroon">Record with confidence</p>
+            <p className="mt-2 text-sm text-gray-600">Standardized sacrament forms reduce errors and keep records consistent over time.</p>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white p-5">
+            <p className="text-sm font-semibold text-sancta-maroon">Find details quickly</p>
+            <p className="mt-2 text-sm text-gray-600">Searchable records help parish teams answer requests faster and with less manual work.</p>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white p-5">
+            <p className="text-sm font-semibold text-sancta-maroon">Serve parishioners better</p>
+            <p className="mt-2 text-sm text-gray-600">Generate certificates and follow-up records without repeated data entry.</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Why Sacrament Registry */}
+      <section id="why" className="border-t border-gray-200/80 bg-white/60 px-4 py-12 sm:px-6 sm:py-16 md:py-20">
+        <div className="mx-auto max-w-4xl">
+          <h2 className="font-serif text-xl font-semibold text-sancta-maroon sm:text-2xl md:text-3xl">
+            Why Sacrament Registry
+          </h2>
+          <p className="mt-3 text-sm text-gray-600 sm:text-base">
+            Designed with input from parish priests and real parish workflows.
+          </p>
+          <div className="mt-6 space-y-3">
+            {whyRegistry.map((point) => (
+              <p key={point} className="rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 sm:text-base">
+                {point}
+              </p>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Features */}
       <section id="features" className="border-t border-gray-200/80 bg-white/60 px-4 py-12 sm:px-6 sm:py-16 md:py-24">
         <div className="mx-auto max-w-6xl">
           <h2 className="font-serif text-xl font-semibold text-gray-800 sm:text-2xl md:text-3xl text-center mb-8 sm:mb-12 px-2">
-            Everything a parish needs to manage sacramental records.
+            Practical features for priests and parish staff
           </h2>
           <div className="grid items-stretch gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {features.map(({ title, description, Icon }) => (
@@ -254,53 +369,112 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Offline section */}
+      <section id="offline" className="border-t border-sancta-gold/40 bg-sancta-maroon px-4 py-12 sm:px-6 sm:py-16 md:py-20">
+        <div className="mx-auto max-w-4xl rounded-2xl border border-white/20 bg-white/10 p-6 sm:p-8 md:p-10">
+          <h2 className="font-serif text-2xl font-semibold text-white sm:text-3xl">
+            Built for Parishes with Unreliable Internet
+          </h2>
+          <p className="mt-4 text-sm text-white/90 sm:text-base">
+            Parish work should not stop when connectivity is weak. Continue recording with confidence, and data syncs automatically when the connection returns.
+          </p>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-sm text-white/95">
+              Continue sacrament entry with confidence during outages.
+            </div>
+            <div className="rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-sm text-white/95">
+              Sync updates automatically when internet access returns.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section id="how-it-works" className="border-t border-gray-200/80 bg-white px-4 py-12 sm:px-6 sm:py-16 md:py-20">
+        <div className="mx-auto max-w-4xl">
+          <h2 className="font-serif text-xl font-semibold text-sancta-maroon sm:text-2xl md:text-3xl">
+            How it works
+          </h2>
+          <div className="mt-6 space-y-4">
+            {howItWorks.map((step, index) => (
+              <div key={step} className="flex gap-3 rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
+                <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sancta-maroon text-sm font-semibold text-white">
+                  {index + 1}
+                </span>
+                <p className="text-sm text-gray-700 sm:text-base">{step}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Access */}
-      <section id="how-it-works" className="border-t border-gray-200/80 bg-white/60 px-4 py-12 sm:px-6 sm:py-16 md:py-24">
+      <section id="access" className="border-t border-gray-200/80 bg-white/60 px-4 py-12 sm:px-6 sm:py-16 md:py-24">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="font-serif text-xl font-semibold text-sancta-maroon sm:text-2xl md:text-3xl px-2">
             Access is by invitation only
           </h2>
           <p className="mt-3 sm:mt-4 text-gray-600 text-sm sm:text-base px-2">
-            Sacrament Registry is available to Catholic parishes and dioceses. Contact your parish office or diocesan administrator to request access.
+            Sacrament Registry is available to Catholic parishes and dioceses through secure, parish-approved onboarding.
           </p>
-          <div className="mt-6 sm:mt-8 flex justify-center">
+          <p className="mt-3 text-sm text-gray-500 px-2">
+            Contact your parish office or write to support for access guidance.
+          </p>
+          <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row gap-3 justify-center">
             <Link
-              href="/login"
-              className="inline-flex items-center justify-center rounded-lg bg-sancta-maroon px-6 py-3.5 text-base font-medium text-white hover:bg-sancta-maroon-dark transition-colors min-h-[44px] w-full sm:w-auto max-w-xs"
+              href={ctaLinks.signIn}
+              className="inline-flex items-center justify-center rounded-lg bg-sancta-maroon px-6 py-3.5 text-base font-medium text-white hover:bg-sancta-maroon-dark transition-colors min-h-[44px] w-full sm:w-auto"
             >
               Sign in
             </Link>
+            <CtaLink
+              href={ctaLinks.requestAccess}
+              className="inline-flex items-center justify-center rounded-lg border-2 border-sancta-maroon bg-white px-6 py-3.5 text-base font-medium text-sancta-maroon hover:bg-sancta-maroon/5 transition-colors min-h-[44px] w-full sm:w-auto"
+            >
+              Request Access for Your Parish
+            </CtaLink>
           </div>
+          <p className="mt-3 text-xs sm:text-sm text-gray-500">
+            Or email us directly at{' '}
+            <a href={`mailto:${supportEmail}`} className="font-medium text-gray-600 hover:text-sancta-maroon underline underline-offset-2">
+              {supportEmail}
+            </a>
+          </p>
         </div>
       </section>
 
       {/* Footer */}
       <footer className="border-t border-gray-200 bg-white px-4 py-8 sm:py-12 sm:px-6">
         <div className="mx-auto max-w-6xl text-center">
-          <div className="flex items-center justify-center gap-2">
-            <CrossIcon className="h-5 w-5 sm:h-6 sm:w-6 text-sancta-gold shrink-0" />
-            <span className="font-serif text-base sm:text-lg font-semibold text-sancta-maroon">Sacrament Registry</span>
+          <div className="flex flex-col items-center">
+            <div className="flex items-center justify-center gap-2">
+              <CrossIcon className="h-5 w-5 sm:h-6 sm:w-6 text-sancta-gold shrink-0" />
+              <span className="font-serif text-base sm:text-lg font-semibold text-sancta-maroon">
+                Sacrament Registry
+              </span>
+            </div>
+            <p className="mt-2 sm:mt-3 text-sm text-gray-600">Sacramental Record Management System</p>
           </div>
-          <p className="mt-2 sm:mt-3 text-sm text-gray-600">
-            Sacramental Record Management System
-          </p>
+
           <div className="mt-4 sm:mt-6 flex flex-wrap items-center justify-center gap-4 sm:gap-6">
-            <Link href="/login" className="text-sm font-medium text-sancta-maroon hover:underline">
+            <Link href={ctaLinks.signIn} className="text-sm font-medium text-sancta-maroon hover:underline">
               Sign in
             </Link>
-            <Link href="/privacy" className="text-sm font-medium text-sancta-maroon hover:underline">
+            <CtaLink href="/privacy" className="text-sm font-medium text-sancta-maroon hover:underline">
               Privacy Notice
-            </Link>
-            <a href="mailto:support@sacramentregistry.com" className="text-sm text-gray-600 hover:text-sancta-maroon">
+            </CtaLink>
+            <CtaLink href={ctaLinks.requestAccess} className="text-sm text-gray-600 hover:text-sancta-maroon">
+              Request Access for Your Parish
+            </CtaLink>
+            <a href={`mailto:${supportEmail}`} className="text-sm text-gray-600 hover:text-sancta-maroon">
               Support
             </a>
             <a href="#" className="text-sm text-gray-600 hover:text-sancta-maroon">
               Documentation
             </a>
           </div>
-          <p className="mt-6 text-sm text-gray-500">
-            Support: support@sacramentregistry.com
-          </p>
+
+          <p className="mt-6 text-sm text-gray-500">Support: {supportEmail}</p>
         </div>
       </footer>
     </div>
