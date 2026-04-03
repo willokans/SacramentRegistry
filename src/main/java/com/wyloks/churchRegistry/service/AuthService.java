@@ -38,4 +38,10 @@ public interface AuthService {
      * Invalidates the token after use. Throws BadCredentialsException if token is invalid or expired.
      */
     void resetPasswordByToken(String token, String newPassword);
+
+    /**
+     * Accepts an invitation token, sets password/profile fields and consumes the invitation.
+     */
+    void acceptInvite(String token, String newPassword, String firstName, String lastName, String title,
+                      String acceptedIpAddress, String acceptedUserAgent);
 }

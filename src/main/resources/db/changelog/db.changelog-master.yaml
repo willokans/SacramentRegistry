@@ -215,3 +215,7 @@ databaseChangeLog:
       file: db/changelog/changes/021-parish-require-marriage-confirmation.yaml
   - include:
       file: db/changelog/changes/022-birth-certificate-document-versioning.yaml
+  - include:
+      file: db/changelog/changes/023-user-invitation-and-org-uniqueness-guardrails.yaml
+  - include:
+      file: db/changelog/changes/024-user-invitation-acceptance-audit-metadata.yaml

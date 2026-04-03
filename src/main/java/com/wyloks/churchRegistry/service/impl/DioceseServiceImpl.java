@@ -12,10 +12,12 @@ import com.wyloks.churchRegistry.security.CurrentUserAccessService;
 import com.wyloks.churchRegistry.service.DioceseService;
 import com.wyloks.churchRegistry.util.NameUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Optional;
@@ -71,6 +73,7 @@ public class DioceseServiceImpl implements DioceseService {
     @Transactional
     @CacheEvict(cacheNames = {CacheConfig.CACHE_DIOCESES_WITH_PARISHES, CacheConfig.CACHE_PARISHES_BY_DIOCESE}, allEntries = true)
     public DioceseResponse create(DioceseRequest request) {
+        requireAdminRole();
         String name = NameUtils.capitalizeNameOrEmpty(request.getDioceseName());
         if (dioceseRepository.existsByDioceseNameIgnoreCase(name)) {
             throw new IllegalArgumentException("A diocese with that name already exists");
@@ -117,5 +120,12 @@ public class DioceseServiceImpl implements DioceseService {
                 .description(p.getDescription())
                 .requireMarriageConfirmation(p.isRequireMarriageConfirmation())
                 .build();
+    }
+
+    private void requireAdminRole() {
+        CurrentUserAccessService.CurrentUserAccess currentUser = currentUserAccessService.currentUser();
+        if (!currentUser.isAdmin()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin role required");
+        }
     }
 }

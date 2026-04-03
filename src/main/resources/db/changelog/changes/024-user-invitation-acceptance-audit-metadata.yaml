@@ -1,0 +1,18 @@
+databaseChangeLog:
+  - changeSet:
+      id: 1
+      author: will_okanumeh
+      changes:
+        - addColumn:
+            tableName: user_invitation
+            columns:
+              - column:
+                  name: accepted_ip_address
+                  type: varchar(64)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: accepted_user_agent
+                  type: varchar(512)
+                  constraints:
+                    nullable: true

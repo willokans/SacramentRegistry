@@ -7,6 +7,7 @@ import AuthenticatedLayout from '@/components/AuthenticatedLayout';
 import {
   getStoredUser,
   createUser,
+  issueUserInvitation,
   fetchDioceses,
   fetchParishes,
   type DioceseResponse,
@@ -31,6 +32,9 @@ export default function UserSetupPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [inviteExpiresAt, setInviteExpiresAt] = useState<string | null>(null);
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   useEffect(() => {
     const user = getStoredUser();
@@ -108,19 +112,57 @@ export default function UserSetupPage() {
         </div>
       )}
 
+      {inviteLink && (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900">
+          <p className="text-sm font-semibold">Invite link</p>
+          <p className="mt-1 text-xs">
+            Share this one-time link with the user. It expires {inviteExpiresAt ?? 'soon'}.
+          </p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <input
+              readOnly
+              value={inviteLink}
+              className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs text-gray-800"
+            />
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(inviteLink);
+                  setCopyState('copied');
+                } catch {
+                  setCopyState('failed');
+                }
+              }}
+              className="rounded-lg bg-sancta-maroon px-4 py-2 text-sm font-medium text-white hover:bg-sancta-maroon-dark"
+            >
+              Copy link
+            </button>
+          </div>
+          {copyState === 'copied' && <p className="mt-2 text-xs text-green-700">Copied to clipboard.</p>}
+          {copyState === 'failed' && <p className="mt-2 text-xs text-red-700">Could not copy. Copy manually.</p>}
+        </div>
+      )}
+
       <div className="mt-6">
         <CreateUserForm
           dioceses={dioceses}
           parishesByDiocese={parishesByDiocese}
-          onSuccess={(displayName) => {
+          onSuccess={({ displayName, inviteLink: createdInviteLink, expiresAt }) => {
             setSuccessMessage(
-              `User "${displayName}" created successfully. They must reset their password on first login.`
+              `User "${displayName}" created and invite issued successfully.`
             );
+            setInviteLink(createdInviteLink);
+            setInviteExpiresAt(new Date(expiresAt).toLocaleString());
+            setCopyState('idle');
             setError(null);
           }}
           onError={(msg) => {
             setError(msg);
             setSuccessMessage(null);
+            setInviteLink(null);
+            setInviteExpiresAt(null);
+            setCopyState('idle');
           }}
         />
       </div>
@@ -136,7 +178,7 @@ function CreateUserForm({
 }: {
   dioceses: DioceseResponse[];
   parishesByDiocese: Record<number, ParishResponse[]>;
-  onSuccess: (displayName: string) => void;
+  onSuccess: (payload: { displayName: string; inviteLink: string; expiresAt: string }) => void;
   onError: (msg: string) => void;
 }) {
   const [title, setTitle] = useState('');
@@ -187,6 +229,10 @@ function CreateUserForm({
       onError('Username is required.');
       return;
     }
+    if (!email.trim()) {
+      onError('Email is required to issue an invite.');
+      return;
+    }
     if (!passwordValid) {
       onError('Password must be at least 8 characters.');
       return;
@@ -204,7 +250,7 @@ function CreateUserForm({
     try {
       const created = await createUser({
         username: username.trim(),
-        email: email.trim() || undefined,
+        email: email.trim(),
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         title: title.trim() || undefined,
@@ -213,8 +259,23 @@ function CreateUserForm({
         parishIds: Array.from(parishIds),
         defaultPassword,
       });
+      if (!created.userId || created.userId <= 0) {
+        throw new Error('User was created but no user ID was returned for invitation.');
+      }
+      const invitation = await issueUserInvitation(created.userId);
+      if (!invitation.token) {
+        throw new Error('Invitation was created but no token was returned.');
+      }
+      const inviteLink =
+        typeof window !== 'undefined'
+          ? `${window.location.origin}/accept-invite?token=${encodeURIComponent(invitation.token)}`
+          : `/accept-invite?token=${encodeURIComponent(invitation.token)}`;
       const displayName = created.displayName || created.username;
-      onSuccess(displayName);
+      onSuccess({
+        displayName,
+        inviteLink,
+        expiresAt: invitation.expiresAt,
+      });
       setTitle('');
       setFirstName('');
       setLastName('');
@@ -309,13 +370,14 @@ function CreateUserForm({
         </div>
         <div>
           <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-            Email <span className="text-gray-400">(optional)</span>
+            Email <span className="text-red-500">*</span>
           </label>
           <input
             id="email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            required
             maxLength={255}
             autoComplete="email"
             className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-sancta-maroon focus:outline-none focus:ring-1 focus:ring-sancta-maroon"
@@ -472,7 +534,7 @@ function CreateUserForm({
         }
         className="mt-6 rounded-lg bg-sancta-maroon px-4 py-2 font-medium text-white hover:bg-sancta-maroon-dark disabled:opacity-50"
       >
-        {saving ? 'Creating…' : 'Create user'}
+        {saving ? 'Creating and issuing invite…' : 'Create user + issue invite'}
       </button>
     </form>
   );

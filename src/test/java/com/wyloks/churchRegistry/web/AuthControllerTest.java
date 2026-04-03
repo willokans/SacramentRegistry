@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -264,6 +265,42 @@ class AuthControllerTest {
     @Test
     void resetPasswordByToken_returns400_whenTokenOrPasswordMissing() throws Exception {
         mvc.perform(post("/api/auth/reset-password-by-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void acceptInvite_returns204_whenRequestValid() throws Exception {
+        mvc.perform(post("/api/auth/accept-invite")
+                        .header("X-Forwarded-For", "203.0.113.10, 10.0.0.1")
+                        .header("User-Agent", "JUnit-Agent/1.0")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "token":"invite-token-123",
+                                  "newPassword":"newpass123",
+                                  "firstName":"John",
+                                  "lastName":"Doe",
+                                  "title":"Fr."
+                                }
+                                """))
+                .andExpect(status().isNoContent());
+
+        verify(authService).acceptInvite(
+                eq("invite-token-123"),
+                eq("newpass123"),
+                eq("John"),
+                eq("Doe"),
+                eq("Fr."),
+                eq("203.0.113.10"),
+                eq("JUnit-Agent/1.0")
+        );
+    }
+
+    @Test
+    void acceptInvite_returns400_whenRequiredFieldsMissing() throws Exception {
+        mvc.perform(post("/api/auth/accept-invite")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest());

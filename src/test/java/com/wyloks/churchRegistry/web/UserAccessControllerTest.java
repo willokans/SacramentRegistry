@@ -2,9 +2,12 @@ package com.wyloks.churchRegistry.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wyloks.churchRegistry.dto.CreateUserRequest;
+import com.wyloks.churchRegistry.dto.IssueUserInvitationRequest;
+import com.wyloks.churchRegistry.dto.IssueUserInvitationResponse;
 import com.wyloks.churchRegistry.dto.ReplaceUserParishAccessRequest;
 import com.wyloks.churchRegistry.dto.UserParishAccessResponse;
 import com.wyloks.churchRegistry.service.AdminUserService;
+import com.wyloks.churchRegistry.service.UserInvitationService;
 import com.wyloks.churchRegistry.service.UserParishAccessService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,6 +50,9 @@ class UserAccessControllerTest {
 
     @MockBean
     AdminUserService adminUserService;
+
+    @MockBean
+    UserInvitationService userInvitationService;
 
     @Test
     void listUsersWithParishAccess_returns200AndData() throws Exception {
@@ -144,5 +150,54 @@ class UserAccessControllerTest {
                 .andExpect(jsonPath("$.role").value("PRIEST"))
                 .andExpect(jsonPath("$.defaultParishId").value(2))
                 .andExpect(jsonPath("$.parishAccessIds.length()").value(1));
+    }
+
+    @Test
+    void issueInvitation_returns201AndTokenPayload() throws Exception {
+        IssueUserInvitationRequest request = IssueUserInvitationRequest.builder()
+                .userId(99L)
+                .build();
+        IssueUserInvitationResponse response = IssueUserInvitationResponse.builder()
+                .invitationId(44L)
+                .userId(99L)
+                .invitedEmail("newuser@example.com")
+                .token("raw-token-value")
+                .expiresAt(java.time.Instant.now().plusSeconds(3600))
+                .build();
+        when(userInvitationService.issueInvitation(99L)).thenReturn(response);
+
+        mvc.perform(post("/api/admin/users/invitations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.invitationId").value(44))
+                .andExpect(jsonPath("$.userId").value(99))
+                .andExpect(jsonPath("$.invitedEmail").value("newuser@example.com"))
+                .andExpect(jsonPath("$.token").value("raw-token-value"))
+                .andExpect(jsonPath("$.expiresAt").exists());
+    }
+
+    @Test
+    void resendInvitation_returns201AndTokenPayload() throws Exception {
+        IssueUserInvitationResponse response = IssueUserInvitationResponse.builder()
+                .invitationId(45L)
+                .userId(99L)
+                .invitedEmail("newuser@example.com")
+                .token("resend-token-value")
+                .expiresAt(java.time.Instant.now().plusSeconds(7200))
+                .build();
+        when(userInvitationService.resendInvitation(44L)).thenReturn(response);
+
+        mvc.perform(post("/api/admin/users/invitations/44/resend"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.invitationId").value(45))
+                .andExpect(jsonPath("$.userId").value(99))
+                .andExpect(jsonPath("$.token").value("resend-token-value"));
+    }
+
+    @Test
+    void revokeInvitation_returns204() throws Exception {
+        mvc.perform(post("/api/admin/users/invitations/44/revoke"))
+                .andExpect(status().isNoContent());
     }
 }

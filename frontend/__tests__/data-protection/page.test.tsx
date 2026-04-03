@@ -24,7 +24,7 @@ describe('Data protection and trust page', () => {
     render(<DataProtectionPage />);
 
     expect(screen.getByRole('link', { name: 'info@sacramentregistry.com' })).toHaveAttribute('href', 'mailto:info@sacramentregistry.com');
-    expect(screen.getByRole('link', { name: 'Read full Privacy Notice' })).toHaveAttribute('href', '/privacy');
+    expect(screen.getByRole('link', { name: 'View formal Privacy Notice' })).toHaveAttribute('href', '/privacy');
     expect(screen.getByRole('link', { name: 'Go to Login' })).toHaveAttribute('href', '/login');
     expect(screen.getByRole('link', { name: 'Back to Home' })).toHaveAttribute('href', '/');
   });

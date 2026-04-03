@@ -206,6 +206,37 @@ class AdminUserAccessSecurityIntegrationTest {
                 .andExpect(jsonPath("$.length()").value(0));
     }
 
+    @Test
+    void nonAdminUser_cannotCreateDioceseOrParish() throws Exception {
+        String adminToken = loginAndGetToken("admin", "password");
+        String priestToken = loginAndGetToken("priest@church_registry.com", "password");
+
+        String dioceseRequest = objectMapper.writeValueAsString(
+                new DiocesePayload("Unauthorized Diocese " + System.nanoTime(), "UDX", "Should be forbidden")
+        );
+        mvc.perform(post("/api/dioceses")
+                        .header("Authorization", "Bearer " + priestToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(dioceseRequest))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.error").value("Forbidden"))
+                .andExpect(jsonPath("$.message").isString());
+
+        Long existingDioceseId = createDiocese(adminToken, "Authorized Diocese " + System.nanoTime(), "ADX");
+        String parishRequest = objectMapper.writeValueAsString(
+                new ParishPayload("Unauthorized Parish " + System.nanoTime(), existingDioceseId, "Should be forbidden")
+        );
+        mvc.perform(post("/api/parishes")
+                        .header("Authorization", "Bearer " + priestToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(parishRequest))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.error").value("Forbidden"))
+                .andExpect(jsonPath("$.message").isString());
+    }
+
     private String loginAndGetToken(String username, String password) throws Exception {
         String response = mvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)

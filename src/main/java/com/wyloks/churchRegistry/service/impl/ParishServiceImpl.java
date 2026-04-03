@@ -12,10 +12,12 @@ import com.wyloks.churchRegistry.security.CurrentUserAccessService;
 import com.wyloks.churchRegistry.service.ParishService;
 import com.wyloks.churchRegistry.util.NameUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Optional;
@@ -55,6 +57,7 @@ public class ParishServiceImpl implements ParishService {
     @Transactional
     @CacheEvict(cacheNames = {CacheConfig.CACHE_DIOCESES_WITH_PARISHES, CacheConfig.CACHE_PARISHES_BY_DIOCESE}, allEntries = true)
     public ParishResponse create(ParishRequest request) {
+        requireAdminRole();
         Diocese diocese = dioceseRepository.findById(request.getDioceseId())
                 .orElseThrow(() -> new IllegalArgumentException("Diocese not found: " + request.getDioceseId()));
         String parishName = NameUtils.capitalizeNameOrEmpty(request.getParishName());
@@ -111,5 +114,12 @@ public class ParishServiceImpl implements ParishService {
                 .description(e.getDescription())
                 .requireMarriageConfirmation(e.isRequireMarriageConfirmation())
                 .build();
+    }
+
+    private void requireAdminRole() {
+        CurrentUserAccessService.CurrentUserAccess currentUser = currentUserAccessService.currentUser();
+        if (!currentUser.isAdmin()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin role required");
+        }
     }
 }

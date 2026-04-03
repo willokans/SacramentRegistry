@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { login, storeAuth, setStoredParishId } from '@/lib/api';
 
@@ -49,11 +49,17 @@ function EyeOffIcon({ className }: { className?: string }) {
 }
 
 export default function LoginPage() {
+  const [inviteAccepted, setInviteAccepted] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setInviteAccepted(params.get('inviteAccepted') === '1');
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -101,6 +107,12 @@ export default function LoginPage() {
           <h2 className="text-xl font-semibold text-sancta-maroon">Welcome back</h2>
           <p className="text-sm text-gray-600 mt-0.5">Sign in to continue your journey.</p>
         </div>
+
+        {inviteAccepted && (
+          <p role="status" className="mb-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+            Invitation accepted. You can now sign in with your username and password.
+          </p>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Username */}

@@ -99,6 +99,36 @@ export async function resetPasswordByToken(token: string, newPassword: string): 
   }
 }
 
+export interface AcceptInviteRequest {
+  token: string;
+  newPassword: string;
+  firstName: string;
+  lastName: string;
+  title?: string;
+}
+
+/** Accept invite token and complete first-time account setup. */
+export async function acceptInvite(request: AcceptInviteRequest): Promise<void> {
+  const body: Record<string, unknown> = {
+    token: request.token.trim(),
+    newPassword: request.newPassword,
+    firstName: request.firstName.trim(),
+    lastName: request.lastName.trim(),
+  };
+  if (request.title != null && request.title.trim() !== '') {
+    body.title = request.title.trim();
+  }
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/auth/accept-invite`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(parseErrorResponse(text, 'Invalid or expired invitation token'));
+  }
+}
+
 /** Reset password for authenticated user (first-login flow). Requires valid JWT. */
 export async function resetPassword(newPassword: string): Promise<void> {
   const res = await fetchWithRetry(`${getBaseUrl()}/api/auth/reset-password`, {
@@ -1760,6 +1790,14 @@ export interface CreateUserRequest {
   defaultPassword: string;
 }
 
+export interface IssueUserInvitationResponse {
+  invitationId: number;
+  userId: number;
+  invitedEmail: string;
+  token: string;
+  expiresAt: string;
+}
+
 export async function createUser(request: CreateUserRequest): Promise<UserParishAccessResponse> {
   const body: Record<string, unknown> = {
     username: request.username,
@@ -1797,6 +1835,26 @@ export async function createUser(request: CreateUserRequest): Promise<UserParish
     parishAccessIds: Array.isArray(u.parishAccessIds)
       ? u.parishAccessIds.map((id: unknown) => Number(id)).filter((n: number) => !Number.isNaN(n) && n > 0)
       : [],
+  };
+}
+
+export async function issueUserInvitation(userId: number): Promise<IssueUserInvitationResponse> {
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/admin/users/invitations`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ userId }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(parseErrorResponse(text, 'Failed to issue invitation'));
+  }
+  const payload = await res.json();
+  return {
+    invitationId: Number(payload?.invitationId),
+    userId: Number(payload?.userId),
+    invitedEmail: String(payload?.invitedEmail ?? ''),
+    token: String(payload?.token ?? ''),
+    expiresAt: String(payload?.expiresAt ?? ''),
   };
 }
 

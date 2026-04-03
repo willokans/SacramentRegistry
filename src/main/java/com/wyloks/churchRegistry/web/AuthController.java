@@ -5,6 +5,7 @@ import com.wyloks.churchRegistry.dto.ForgotPasswordResponse;
 import com.wyloks.churchRegistry.dto.LoginRequest;
 import com.wyloks.churchRegistry.dto.LoginResponse;
 import com.wyloks.churchRegistry.dto.RefreshRequest;
+import com.wyloks.churchRegistry.dto.AcceptInviteRequest;
 import com.wyloks.churchRegistry.dto.ResetPasswordByTokenRequest;
 import com.wyloks.churchRegistry.dto.ResetPasswordRequest;
 import com.wyloks.churchRegistry.security.CurrentUserAccessService;
@@ -12,6 +13,7 @@ import com.wyloks.churchRegistry.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -75,6 +77,33 @@ public class AuthController {
     public ResponseEntity<Void> resetPasswordByToken(@Valid @RequestBody ResetPasswordByTokenRequest request) {
         authService.resetPasswordByToken(request.getToken(), request.getNewPassword());
         return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Accept invite", description = "Accept a one-time invitation token, set password/profile details and activate the account for normal login.")
+    @ApiResponse(responseCode = "400", description = "Invalid, expired, revoked or already used invitation")
+    @SecurityRequirements
+    @PostMapping("/accept-invite")
+    public ResponseEntity<Void> acceptInvite(@Valid @RequestBody AcceptInviteRequest request, HttpServletRequest servletRequest) {
+        authService.acceptInvite(
+                request.getToken(),
+                request.getNewPassword(),
+                request.getFirstName(),
+                request.getLastName(),
+                request.getTitle(),
+                extractClientIp(servletRequest),
+                servletRequest.getHeader("User-Agent")
+        );
+        return ResponseEntity.noContent().build();
+    }
+
+    private String extractClientIp(HttpServletRequest request) {
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            int commaIndex = forwardedFor.indexOf(',');
+            return commaIndex >= 0 ? forwardedFor.substring(0, commaIndex).trim() : forwardedFor.trim();
+        }
+        String remoteAddr = request.getRemoteAddr();
+        return remoteAddr != null && !remoteAddr.isBlank() ? remoteAddr.trim() : null;
     }
 
     @ExceptionHandler(BadCredentialsException.class)
