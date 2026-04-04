@@ -7,8 +7,7 @@ import AuthenticatedLayout from '@/components/AuthenticatedLayout';
 import { useParish } from '@/context/ParishContext';
 import {
   getStoredUser,
-  fetchDioceses,
-  fetchParishes,
+  fetchDiocesesWithParishes,
   fetchParishMarriageRequirements,
   patchParishMarriageRequirements,
   type DioceseResponse,
@@ -25,6 +24,7 @@ export default function MarriageRequirementsSettingsPage() {
   const [dioceses, setDioceses] = useState<DioceseResponse[]>([]);
   const [parishesByDiocese, setParishesByDiocese] = useState<Record<number, ParishResponse[]>>({});
   const [selectedParishId, setSelectedParishId] = useState<number | null>(null);
+  const [parishSearch, setParishSearch] = useState('');
   const [requireConfirmation, setRequireConfirmation] = useState<boolean>(true);
   const [loading, setLoading] = useState(true);
   const [loadingReq, setLoadingReq] = useState(false);
@@ -44,10 +44,15 @@ export default function MarriageRequirementsSettingsPage() {
     setLoading(true);
     setError(null);
     try {
-      const dioceseList = await fetchDioceses();
+      const dioceseListWithParishes = await fetchDiocesesWithParishes();
+      const dioceseList: DioceseResponse[] = dioceseListWithParishes.map((d) => ({
+        id: d.id,
+        name: d.dioceseName,
+        dioceseName: d.dioceseName,
+      }));
       const byDiocese: Record<number, ParishResponse[]> = {};
-      for (const d of dioceseList) {
-        byDiocese[d.id] = await fetchParishes(d.id);
+      for (const d of dioceseListWithParishes) {
+        byDiocese[d.id] = d.parishes ?? [];
       }
       setDioceses(dioceseList);
       setParishesByDiocese(byDiocese);
@@ -119,6 +124,26 @@ export default function MarriageRequirementsSettingsPage() {
   }
 
   const allParishes = Object.values(parishesByDiocese).flat();
+  const parishOptions = dioceses.flatMap((d) => {
+    const dioceseName = d.name ?? d.dioceseName ?? `Diocese ${d.id}`;
+    return (parishesByDiocese[d.id] ?? []).map((p) => ({
+      ...p,
+      dioceseName,
+    }));
+  });
+  const selectedParish = selectedParishId == null
+    ? null
+    : parishOptions.find((p) => p.id === selectedParishId) ?? null;
+  const normalizedParishSearch = parishSearch.trim().toLowerCase();
+  const filteredParishOptions = parishOptions
+    .filter((p) => {
+      if (!normalizedParishSearch) return true;
+      return (
+        p.parishName.toLowerCase().includes(normalizedParishSearch) ||
+        p.dioceseName.toLowerCase().includes(normalizedParishSearch)
+      );
+    })
+    .slice(0, 50);
 
   return (
     <AuthenticatedLayout>
@@ -148,33 +173,51 @@ export default function MarriageRequirementsSettingsPage() {
         ) : (
           <>
             <div>
-              <label htmlFor="parish-select" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="parish-search" className="block text-sm font-medium text-gray-700">
                 Parish
               </label>
-              <select
-                id="parish-select"
+              <input
+                id="parish-search"
+                type="search"
+                value={parishSearch}
+                onChange={(e) => setParishSearch(e.target.value)}
+                placeholder="Search parish or diocese..."
                 className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                value={selectedParishId ?? ''}
-                onChange={(e) => {
-                  setSaveSuccess(false);
-                  setSelectedParishId(e.target.value ? Number(e.target.value) : null);
-                }}
-              >
-                <option value="">Select a parish…</option>
-                {dioceses.map((d) => {
-                  const parishes = parishesByDiocese[d.id] ?? [];
-                  if (parishes.length === 0) return null;
-                  return (
-                    <optgroup key={d.id} label={d.name}>
-                      {parishes.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.parishName}
-                        </option>
-                      ))}
-                    </optgroup>
-                  );
-                })}
-              </select>
+              />
+              <div className="mt-2 max-h-56 overflow-y-auto rounded-lg border border-gray-200 bg-white">
+                {filteredParishOptions.length === 0 ? (
+                  <p className="p-3 text-sm text-gray-500">No parishes match your search.</p>
+                ) : (
+                  <ul className="divide-y divide-gray-100">
+                    {filteredParishOptions.map((p) => {
+                      const isSelected = p.id === selectedParishId;
+                      return (
+                        <li key={p.id}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSaveSuccess(false);
+                              setSelectedParishId(p.id);
+                              setParishSearch(p.parishName);
+                            }}
+                            className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 ${
+                              isSelected ? 'bg-sancta-maroon/10 text-sancta-maroon font-medium' : 'text-gray-800'
+                            }`}
+                          >
+                            <span className="block">{p.parishName}</span>
+                            <span className="block text-xs text-gray-500">{p.dioceseName}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+              {selectedParish && (
+                <p className="mt-2 text-xs text-gray-600">
+                  Selected: <span className="font-medium">{selectedParish.parishName}</span> ({selectedParish.dioceseName})
+                </p>
+              )}
             </div>
 
             {selectedParishId != null && (
