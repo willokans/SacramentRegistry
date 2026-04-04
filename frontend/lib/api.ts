@@ -107,6 +107,35 @@ export interface AcceptInviteRequest {
   title?: string;
 }
 
+export interface InviteProfileResponse {
+  title?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  invitedEmail?: string | null;
+  expiresAt?: string | null;
+}
+
+/** Reads invite profile defaults (title/first/last) for prefill by token. */
+export async function fetchInviteProfile(token: string): Promise<InviteProfileResponse> {
+  const normalizedToken = token.trim();
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/auth/invite-profile?token=${encodeURIComponent(normalizedToken)}`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(parseErrorResponse(text, 'Invalid or expired invitation token'));
+  }
+  const payload = await res.json();
+  return {
+    title: payload?.title == null ? null : String(payload.title),
+    firstName: payload?.firstName == null ? null : String(payload.firstName),
+    lastName: payload?.lastName == null ? null : String(payload.lastName),
+    invitedEmail: payload?.invitedEmail == null ? null : String(payload.invitedEmail),
+    expiresAt: payload?.expiresAt == null ? null : String(payload.expiresAt),
+  };
+}
+
 /** Accept invite token and complete first-time account setup. */
 export async function acceptInvite(request: AcceptInviteRequest): Promise<void> {
   const body: Record<string, unknown> = {

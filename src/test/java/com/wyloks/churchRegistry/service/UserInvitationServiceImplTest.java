@@ -109,6 +109,37 @@ class UserInvitationServiceImplTest {
     }
 
     @Test
+    void getInvitationProfile_returnsPrefillFieldsForActiveInvite() {
+        AppUser invited = AppUser.builder()
+                .id(20L)
+                .title("Fr.")
+                .firstName("James")
+                .lastName("Peter")
+                .email("james@example.com")
+                .build();
+        UserInvitation invitation = UserInvitation.builder()
+                .id(201L)
+                .appUser(invited)
+                .invitedEmail("james@example.com")
+                .status(UserInvitationStatus.PENDING)
+                .tokenHash("hashed-token")
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .build();
+        when(userInvitationRepository.findByStatusAndExpiresAtBefore(org.mockito.ArgumentMatchers.eq(UserInvitationStatus.PENDING), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(List.of());
+        when(userInvitationRepository.findByTokenHash(org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(Optional.of(invitation));
+
+        var response = service.getInvitationProfile("raw-token");
+
+        assertThat(response.getTitle()).isEqualTo("Fr.");
+        assertThat(response.getFirstName()).isEqualTo("James");
+        assertThat(response.getLastName()).isEqualTo("Peter");
+        assertThat(response.getInvitedEmail()).isEqualTo("james@example.com");
+        assertThat(response.getExpiresAt()).isEqualTo(invitation.getExpiresAt());
+    }
+
+    @Test
     void issueInvitation_initializesEmailDeliveryTrackingToPending() {
         setExposeTokenInResponse(false);
         AppUser admin = AppUser.builder()

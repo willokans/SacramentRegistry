@@ -3,6 +3,7 @@
  */
 import {
   createCommunionWithExternalBaptismPendingProof,
+  fetchInviteProfile,
   fetchDashboardCounts,
   fetchDioceseDashboard,
   getStoredDioceseId,
@@ -271,6 +272,38 @@ describe('getStoredDioceseId / setStoredDioceseId', () => {
   it('returns null for invalid stored value', () => {
     localStorage.setItem('church_registry_diocese_id', 'invalid');
     expect(getStoredDioceseId()).toBeNull();
+  });
+});
+
+describe('fetchInviteProfile', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it('calls invite-profile endpoint and maps prefill fields', async () => {
+    const mockFetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          title: 'Fr.',
+          firstName: 'John',
+          lastName: 'Doe',
+          invitedEmail: 'john@example.com',
+          expiresAt: '2026-04-12T10:00:00Z',
+        }),
+    });
+    global.fetch = mockFetch;
+
+    const response = await fetchInviteProfile('token-123');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:8080/api/auth/invite-profile?token=token-123',
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(response.firstName).toBe('John');
+    expect(response.lastName).toBe('Doe');
+    expect(response.title).toBe('Fr.');
   });
 });
 

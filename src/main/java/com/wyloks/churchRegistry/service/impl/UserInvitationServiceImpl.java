@@ -1,5 +1,6 @@
 package com.wyloks.churchRegistry.service.impl;
 
+import com.wyloks.churchRegistry.dto.InviteProfileResponse;
 import com.wyloks.churchRegistry.dto.IssueUserInvitationResponse;
 import com.wyloks.churchRegistry.entity.AppUser;
 import com.wyloks.churchRegistry.entity.UserInvitation;
@@ -64,6 +65,25 @@ public class UserInvitationServiceImpl implements UserInvitationService {
         UserInvitation invitation = userInvitationRepository.findFirstByAppUserIdOrderByCreatedAtDescIdDesc(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invitation not found for user: " + userId));
         return buildInvitationResponse(invitation, null);
+    }
+
+    @Override
+    @Transactional
+    public InviteProfileResponse getInvitationProfile(String token) {
+        Instant now = Instant.now();
+        expirePendingInvitations(now);
+        UserInvitation invitation = findActiveInvitationByToken(token, now);
+        AppUser user = invitation.getAppUser();
+        if (user == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation user does not exist");
+        }
+        return InviteProfileResponse.builder()
+                .title(user.getTitle())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .invitedEmail(invitation.getInvitedEmail())
+                .expiresAt(invitation.getExpiresAt())
+                .build();
     }
 
     @Override
@@ -142,24 +162,7 @@ public class UserInvitationServiceImpl implements UserInvitationService {
                                  String acceptedIpAddress, String acceptedUserAgent) {
         Instant now = Instant.now();
         expirePendingInvitations(now);
-
-        String normalizedToken = token != null ? token.trim() : "";
-        if (normalizedToken.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation token is required");
-        }
-
-        UserInvitation invitation = userInvitationRepository.findByTokenHash(hashToken(normalizedToken))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid invitation token"));
-
-        if (invitation.getStatus() != UserInvitationStatus.PENDING) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation is no longer active");
-        }
-        if (invitation.getExpiresAt().isBefore(now)) {
-            invitation.setStatus(UserInvitationStatus.EXPIRED);
-            invitation.setUpdatedAt(now);
-            userInvitationRepository.save(invitation);
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation has expired");
-        }
+        UserInvitation invitation = findActiveInvitationByToken(token, now);
 
         AppUser user = invitation.getAppUser();
         if (user == null) {
@@ -203,6 +206,27 @@ public class UserInvitationServiceImpl implements UserInvitationService {
             log.info("Revoking {} pending invitation(s) for userId={}", pendingInvitations.size(), userId);
             userInvitationRepository.saveAll(pendingInvitations);
         }
+    }
+
+    private UserInvitation findActiveInvitationByToken(String token, Instant now) {
+        String normalizedToken = token != null ? token.trim() : "";
+        if (normalizedToken.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation token is required");
+        }
+
+        UserInvitation invitation = userInvitationRepository.findByTokenHash(hashToken(normalizedToken))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid invitation token"));
+
+        if (invitation.getStatus() != UserInvitationStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation is no longer active");
+        }
+        if (invitation.getExpiresAt().isBefore(now)) {
+            invitation.setStatus(UserInvitationStatus.EXPIRED);
+            invitation.setUpdatedAt(now);
+            userInvitationRepository.save(invitation);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation has expired");
+        }
+        return invitation;
     }
 
     private CurrentUserAccessService.CurrentUserAccess requireAdmin() {

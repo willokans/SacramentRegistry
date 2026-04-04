@@ -2,6 +2,7 @@ package com.wyloks.churchRegistry.web;
 
 import com.wyloks.churchRegistry.dto.ForgotPasswordRequest;
 import com.wyloks.churchRegistry.dto.ForgotPasswordResponse;
+import com.wyloks.churchRegistry.dto.InviteProfileResponse;
 import com.wyloks.churchRegistry.dto.LoginRequest;
 import com.wyloks.churchRegistry.dto.LoginResponse;
 import com.wyloks.churchRegistry.dto.RefreshRequest;
@@ -77,6 +78,14 @@ public class AuthController {
     public ResponseEntity<Void> resetPasswordByToken(@Valid @RequestBody ResetPasswordByTokenRequest request) {
         authService.resetPasswordByToken(request.getToken(), request.getNewPassword());
         return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Accept invite", description = "Accept a one-time invitation token, set password/profile details and activate the account for normal login.")
+    @ApiResponse(responseCode = "400", description = "Invalid, expired, revoked or already used invitation")
+    @SecurityRequirements
+    @GetMapping("/invite-profile")
+    public ResponseEntity<InviteProfileResponse> getInviteProfile(@RequestParam String token) {
+        return ResponseEntity.ok(authService.getInviteProfile(token));
     }
 
     @Operation(summary = "Accept invite", description = "Accept a one-time invitation token, set password/profile details and activate the account for normal login.")

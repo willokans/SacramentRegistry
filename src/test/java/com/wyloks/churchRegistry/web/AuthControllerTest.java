@@ -3,6 +3,7 @@ package com.wyloks.churchRegistry.web;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wyloks.churchRegistry.config.TestSecurityConfig;
 import com.wyloks.churchRegistry.dto.ForgotPasswordResponse;
+import com.wyloks.churchRegistry.dto.InviteProfileResponse;
 import com.wyloks.churchRegistry.dto.LoginRequest;
 import com.wyloks.churchRegistry.dto.LoginResponse;
 import com.wyloks.churchRegistry.security.CurrentUserAccessService;
@@ -21,6 +22,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -304,5 +306,25 @@ class AuthControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getInviteProfile_returns200AndPrefillData() throws Exception {
+        InviteProfileResponse response = InviteProfileResponse.builder()
+                .title("Fr.")
+                .firstName("John")
+                .lastName("Doe")
+                .invitedEmail("john@example.com")
+                .expiresAt(java.time.Instant.now().plusSeconds(3600))
+                .build();
+        when(authService.getInviteProfile("invite-token-123")).thenReturn(response);
+
+        mvc.perform(get("/api/auth/invite-profile").param("token", "invite-token-123"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Fr."))
+                .andExpect(jsonPath("$.firstName").value("John"))
+                .andExpect(jsonPath("$.lastName").value("Doe"))
+                .andExpect(jsonPath("$.invitedEmail").value("john@example.com"))
+                .andExpect(jsonPath("$.expiresAt").exists());
     }
 }

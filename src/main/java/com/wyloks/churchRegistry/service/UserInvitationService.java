@@ -1,5 +1,6 @@
 package com.wyloks.churchRegistry.service;
 
+import com.wyloks.churchRegistry.dto.InviteProfileResponse;
 import com.wyloks.churchRegistry.dto.IssueUserInvitationResponse;
 
 public interface UserInvitationService {
@@ -7,6 +8,8 @@ public interface UserInvitationService {
     IssueUserInvitationResponse issueInvitation(Long userId);
 
     IssueUserInvitationResponse getLatestInvitationForUser(Long userId);
+
+    InviteProfileResponse getInvitationProfile(String token);
 
     IssueUserInvitationResponse resendInvitation(Long invitationId);
 

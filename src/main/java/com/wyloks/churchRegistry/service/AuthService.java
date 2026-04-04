@@ -1,6 +1,7 @@
 package com.wyloks.churchRegistry.service;
 
 import com.wyloks.churchRegistry.dto.ForgotPasswordResponse;
+import com.wyloks.churchRegistry.dto.InviteProfileResponse;
 import com.wyloks.churchRegistry.dto.LoginResponse;
 
 public interface AuthService {
@@ -44,4 +45,6 @@ public interface AuthService {
      */
     void acceptInvite(String token, String newPassword, String firstName, String lastName, String title,
                       String acceptedIpAddress, String acceptedUserAgent);
+
+    InviteProfileResponse getInviteProfile(String token);
 }

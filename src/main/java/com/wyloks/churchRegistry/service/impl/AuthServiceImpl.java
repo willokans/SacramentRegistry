@@ -1,6 +1,7 @@
 package com.wyloks.churchRegistry.service.impl;
 
 import com.wyloks.churchRegistry.dto.ForgotPasswordResponse;
+import com.wyloks.churchRegistry.dto.InviteProfileResponse;
 import com.wyloks.churchRegistry.dto.LoginResponse;
 import com.wyloks.churchRegistry.entity.AppUser;
 import com.wyloks.churchRegistry.entity.PasswordResetToken;
@@ -192,5 +193,11 @@ public class AuthServiceImpl implements AuthService {
         userInvitationService.acceptInvitation(
                 token, newPassword, firstName, lastName, title, acceptedIpAddress, acceptedUserAgent
         );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public InviteProfileResponse getInviteProfile(String token) {
+        return userInvitationService.getInvitationProfile(token);
     }
 }

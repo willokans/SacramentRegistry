@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { acceptInvite } from '@/lib/api';
+import { acceptInvite, fetchInviteProfile } from '@/lib/api';
 
 const TITLE_OPTIONS = ['Mr', 'Mrs', 'Miss', 'Ms', 'Sir', 'Fr.', 'Rev.', 'Dr.', 'Prof.'];
 
@@ -36,7 +36,20 @@ export default function AcceptInvitePage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    setToken(params.get('token')?.trim() ?? '');
+    const tokenFromUrl = params.get('token')?.trim() ?? '';
+    setToken(tokenFromUrl);
+    if (!tokenFromUrl) {
+      return;
+    }
+    fetchInviteProfile(tokenFromUrl)
+      .then((profile) => {
+        setTitle((prev) => prev || profile.title?.trim() || '');
+        setFirstName((prev) => prev || profile.firstName?.trim() || '');
+        setLastName((prev) => prev || profile.lastName?.trim() || '');
+      })
+      .catch(() => {
+        // Keep manual entry available even if prefill lookup fails.
+      });
   }, []);
 
   const passwordValid = newPassword.length >= 8;
