@@ -1785,6 +1785,29 @@ export async function listUsersWithParishAccess(): Promise<UserParishAccessRespo
   }));
 }
 
+export async function searchUsersWithParishAccess(
+  query: string,
+  page = 0,
+  size = 20
+): Promise<SacramentPageResponse<UserParishAccessResponse>> {
+  const params = new URLSearchParams({
+    q: query.trim(),
+    page: String(page),
+    size: String(size),
+    sort: 'username,asc',
+  });
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/admin/users/parish-access/search?${params.toString()}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    if (res.status === 403) throw new Error('Admin access required');
+    throw new Error(res.status === 401 ? 'Unauthorized' : 'Failed to fetch users');
+  }
+  return normalizePageResponse<UserParishAccessResponse>(
+    await res.json() as RawPageResponse<UserParishAccessResponse>
+  );
+}
+
 export async function getUserParishAccess(userId: number): Promise<UserParishAccessResponse> {
   const res = await fetchWithRetry(`${getBaseUrl()}/api/admin/users/${userId}/parish-access`, {
     headers: getAuthHeaders(),

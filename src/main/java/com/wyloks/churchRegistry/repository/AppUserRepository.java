@@ -3,6 +3,8 @@ package com.wyloks.churchRegistry.repository;
 import com.wyloks.churchRegistry.entity.AppUser;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -32,6 +34,18 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     @EntityGraph(attributePaths = {"parish", "parishAccesses"})
     List<AppUser> findAllByOrderByUsernameAsc();
+
+    @EntityGraph(attributePaths = {"parish", "parishAccesses"})
+    @Query("""
+            SELECT u FROM AppUser u
+            WHERE (:q IS NULL OR TRIM(:q) = '' OR
+                LOWER(COALESCE(u.username, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR
+                LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR
+                LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR
+                LOWER(COALESCE(u.lastName, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR
+                LOWER(COALESCE(u.displayName, '')) LIKE LOWER(CONCAT('%', :q, '%')))
+            """)
+    Page<AppUser> searchByUserMetadata(@Param("q") String query, Pageable pageable);
 
     boolean existsByUsername(String username);
 

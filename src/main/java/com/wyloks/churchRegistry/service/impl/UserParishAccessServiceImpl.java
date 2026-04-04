@@ -9,6 +9,8 @@ import com.wyloks.churchRegistry.repository.ParishRepository;
 import com.wyloks.churchRegistry.security.AppUserDetails;
 import com.wyloks.churchRegistry.service.UserParishAccessService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -39,6 +41,15 @@ public class UserParishAccessServiceImpl implements UserParishAccessService {
         return appUserRepository.findAllByOrderByUsernameAsc().stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<UserParishAccessResponse> searchUsersWithParishAccess(String query, Pageable pageable) {
+        requireAdmin();
+        String normalizedQuery = query == null ? "" : query.trim();
+        return appUserRepository.searchByUserMetadata(normalizedQuery, pageable)
+                .map(this::toResponse);
     }
 
     @Override

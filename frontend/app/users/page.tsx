@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import AuthenticatedLayout from '@/components/AuthenticatedLayout';
 import {
   getStoredUser,
-  listUsersWithParishAccess,
+  searchUsersWithParishAccess,
   replaceUserParishAccess,
   getLatestUserInvitation,
   resendUserInvitation,
@@ -22,14 +22,21 @@ function isAdminOrSuperAdmin(role: string | null | undefined): boolean {
   return role === 'ADMIN' || role === 'SUPER_ADMIN';
 }
 
+const USERS_PAGE_SIZE = 20;
+
 export default function UsersPage() {
   const router = useRouter();
   const [users, setUsers] = useState<UserParishAccessResponse[]>([]);
   const [dioceses, setDioceses] = useState<DioceseResponse[]>([]);
   const [parishesByDiocese, setParishesByDiocese] = useState<Record<number, ParishResponse[]>>({});
   const [loading, setLoading] = useState(true);
+  const [usersLoading, setUsersLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [usersPage, setUsersPage] = useState(0);
+  const [usersTotalPages, setUsersTotalPages] = useState(1);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [latestInvitation, setLatestInvitation] = useState<IssueUserInvitationResponse | null>(null);
@@ -47,15 +54,11 @@ export default function UsersPage() {
     }
   }, [router]);
 
-  const loadData = useCallback(async () => {
+  const loadReferenceData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [userList, dioceseList] = await Promise.all([
-        listUsersWithParishAccess(),
-        fetchDioceses(),
-      ]);
-      setUsers(userList);
+      const dioceseList = await fetchDioceses();
       const byDiocese: Record<number, ParishResponse[]> = {};
       for (const d of dioceseList) {
         const parishes = await fetchParishes(d.id);
@@ -70,11 +73,50 @@ export default function UsersPage() {
     }
   }, []);
 
+  const loadUsers = useCallback(async () => {
+    setUsersLoading(true);
+    setError(null);
+    try {
+      const page = await searchUsersWithParishAccess(searchQuery, usersPage, USERS_PAGE_SIZE);
+      setUsers(page.content);
+      setUsersTotalPages(Math.max(1, page.totalPages || 1));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load');
+    } finally {
+      setUsersLoading(false);
+    }
+  }, [searchQuery, usersPage]);
+
   useEffect(() => {
     const user = getStoredUser();
     if (!isAdminOrSuperAdmin(user?.role)) return;
-    loadData();
-  }, [loadData]);
+    loadReferenceData();
+  }, [loadReferenceData]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setUsersPage(0);
+      setSearchQuery(searchInput.trim());
+    }, 350);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [searchInput]);
+
+  useEffect(() => {
+    const user = getStoredUser();
+    if (!isAdminOrSuperAdmin(user?.role)) return;
+    loadUsers();
+  }, [loadUsers]);
+
+  useEffect(() => {
+    if (selectedUserId == null) return;
+    if (!users.some((u) => u.userId === selectedUserId)) {
+      setSelectedUserId(null);
+      setLatestInvitation(null);
+      setInvitationError(null);
+    }
+  }, [selectedUserId, users]);
 
   useEffect(() => {
     if (selectedUserId == null) {
@@ -145,6 +187,20 @@ export default function UsersPage() {
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_1fr]">
         <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
           <h2 className="text-lg font-semibold text-sancta-maroon">Users</h2>
+          <label htmlFor="user-search" className="mt-3 block text-xs font-medium uppercase tracking-wide text-gray-500">
+            Search
+          </label>
+          <input
+            id="user-search"
+            type="search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search by name, username, or email"
+            className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-sancta-maroon focus:outline-none focus:ring-1 focus:ring-sancta-maroon"
+          />
+          {usersLoading && (
+            <p className="mt-2 text-xs text-gray-500">Refreshing users…</p>
+          )}
           {users.length === 0 ? (
             <p className="mt-3 text-gray-500">No users found.</p>
           ) : (
@@ -176,6 +232,29 @@ export default function UsersPage() {
               ))}
             </ul>
           )}
+          <div className="mt-3 flex items-center justify-between text-xs text-gray-600">
+            <span>
+              Page {usersPage + 1} of {usersTotalPages}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={usersPage <= 0 || usersLoading}
+                onClick={() => setUsersPage((prev) => Math.max(0, prev - 1))}
+                className="rounded border border-gray-200 px-2.5 py-1 hover:bg-gray-100 disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                disabled={usersPage >= usersTotalPages - 1 || usersLoading}
+                onClick={() => setUsersPage((prev) => prev + 1)}
+                className="rounded border border-gray-200 px-2.5 py-1 hover:bg-gray-100 disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </section>
 
         <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">

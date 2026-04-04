@@ -13,6 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
@@ -72,6 +74,32 @@ class UserAccessControllerTest {
                 .andExpect(jsonPath("$[0].userId").value(1))
                 .andExpect(jsonPath("$[0].username").value("priest@church_registry.com"))
                 .andExpect(jsonPath("$[0].defaultParishId").value(2));
+    }
+
+    @Test
+    void searchUsersWithParishAccess_returnsPagedData() throws Exception {
+        UserParishAccessResponse response = UserParishAccessResponse.builder()
+                .userId(2L)
+                .username("priest@church_registry.com")
+                .displayName("Fr. John")
+                .role("PRIEST")
+                .defaultParishId(2L)
+                .parishAccessIds(Set.of(2L))
+                .build();
+        when(userParishAccessService.searchUsersWithParishAccess(any(), any()))
+                .thenReturn(new PageImpl<>(List.of(response), PageRequest.of(0, 20), 1));
+
+        mvc.perform(get("/api/admin/users/parish-access/search")
+                        .param("q", "john")
+                        .param("page", "0")
+                        .param("size", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].userId").value(2))
+                .andExpect(jsonPath("$.content[0].username").value("priest@church_registry.com"))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.number").value(0));
     }
 
     @Test

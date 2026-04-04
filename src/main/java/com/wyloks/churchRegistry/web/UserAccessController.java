@@ -10,6 +10,8 @@ import com.wyloks.churchRegistry.service.UserInvitationService;
 import com.wyloks.churchRegistry.service.UserParishAccessService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -59,6 +61,14 @@ public class UserAccessController {
     @GetMapping("/parish-access")
     public List<UserParishAccessResponse> listUsersWithParishAccess() {
         return userParishAccessService.listAllUsersWithParishAccess();
+    }
+
+    @GetMapping("/parish-access/search")
+    public Page<UserParishAccessResponse> searchUsersWithParishAccess(
+            @RequestParam(name = "q", required = false) String query,
+            Pageable pageable
+    ) {
+        return userParishAccessService.searchUsersWithParishAccess(query, pageable);
     }
 
     @GetMapping("/{id}/parish-access")
