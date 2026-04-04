@@ -162,8 +162,11 @@ const NOTICE_SECTIONS: NoticeSection[] = [
 export default function PrivacyNoticePage() {
   return (
     <main className="min-h-screen bg-pattern px-4 py-8 sm:px-6 sm:py-12">
-      <div className="mx-auto max-w-4xl space-y-6">
+      <div className="space-y-6">
         <header className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <Link href="/" className="inline-block text-sm font-medium text-sancta-maroon hover:underline">
+            ← Back to Home
+          </Link>
           <h1 className="text-2xl sm:text-3xl font-serif font-semibold text-sancta-maroon">
             Privacy Notice
           </h1>

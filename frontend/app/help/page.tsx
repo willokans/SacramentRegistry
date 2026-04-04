@@ -19,7 +19,7 @@ const SECTIONS = [
 export default function HelpPage() {
   return (
     <AuthenticatedLayout>
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="space-y-6">
         <h1 className="text-2xl md:text-3xl font-serif font-semibold text-sancta-maroon">
           Help Center
         </h1>
