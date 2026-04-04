@@ -259,7 +259,7 @@ export default function AuthenticatedLayout({
                     onClick={closeMobileMenu}
                     className="text-xs text-sancta-maroon hover:underline mt-1 inline-block"
                   >
-                    {parishes.length > 0 ? 'Manage dioceses & parishes' : 'Add diocese & parish'}
+                    Directory Management
                   </Link>
                 )}
                 {parishError && (
@@ -284,8 +284,7 @@ export default function AuthenticatedLayout({
                   { href: '/dashboard', label: 'Parish Dashboard' },
                   ...(isAdmin || isSuperAdmin
                     ? [
-                        { href: '/parishes', label: 'Dioceses & Parishes' },
-                        { href: '/settings', label: 'Settings' },
+                        { href: '/settings', label: 'Administration' },
                       ]
                     : []),
                   { href: '/baptisms', label: 'Baptisms' },
@@ -397,7 +396,7 @@ export default function AuthenticatedLayout({
                 href="/parishes"
                 className="text-xs text-sancta-maroon hover:underline"
               >
-                {parishes.length > 0 ? 'Manage dioceses & parishes' : 'Add diocese & parish'}
+                Directory Management
               </Link>
             )}
             {parishError && (
@@ -441,20 +440,11 @@ export default function AuthenticatedLayout({
               <>
                 <li>
                   <Link
-                    href="/parishes"
-                    prefetch={false}
-                    className="block px-3 py-2 rounded-lg text-sancta-maroon font-medium hover:bg-sancta-maroon/10"
-                  >
-                    Dioceses & Parishes
-                  </Link>
-                </li>
-                <li>
-                  <Link
                     href="/settings"
                     prefetch={false}
                     className="block px-3 py-2 rounded-lg text-sancta-maroon font-medium hover:bg-sancta-maroon/10"
                   >
-                    Settings
+                    Administration
                   </Link>
                 </li>
               </>

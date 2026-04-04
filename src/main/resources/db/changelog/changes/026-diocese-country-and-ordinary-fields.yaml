@@ -1,0 +1,396 @@
+databaseChangeLog:
+  - changeSet:
+      id: 1
+      author: will_okanumeh
+      changes:
+        - addColumn:
+            tableName: diocese
+            columns:
+              - column:
+                  name: country_code
+                  type: varchar(2)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: country_name
+                  type: varchar(100)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: ordinary_name
+                  type: varchar(255)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: ordinary_title
+                  type: varchar(100)
+                  constraints:
+                    nullable: true
+        - createIndex:
+            indexName: idx_diocese_country_code
+            tableName: diocese
+            columns:
+              - column:
+                  name: country_code
+        - createIndex:
+            indexName: idx_diocese_country_code_diocese_name
+            tableName: diocese
+            columns:
+              - column:
+                  name: country_code
+              - column:
+                  name: diocese_name
+
+  - changeSet:
+      id: 2
+      author: will_okanumeh
+      preConditions:
+        - onFail: MARK_RAN
+        - dbms:
+            type: postgresql
+      changes:
+        - sql:
+            sql: |
+              DROP INDEX IF EXISTS uidx_diocese_normalized_name;
+
+              CREATE UNIQUE INDEX IF NOT EXISTS uidx_diocese_country_normalized_name
+                ON diocese (country_code, LOWER(BTRIM(diocese_name)))
+                WHERE country_code IS NOT NULL;
+
+  - changeSet:
+      id: 3
+      author: will_okanumeh
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO diocese (
+                diocese_name,
+                country_code,
+                country_name,
+                ordinary_name,
+                ordinary_title
+              )
+              SELECT
+                seed.diocese_name,
+                seed.country_code,
+                seed.country_name,
+                NULL,
+                seed.ordinary_title
+              FROM (
+                VALUES
+                  ('NG','Nigeria','Aba','Bishop'),
+                  ('NG','Nigeria','Abakaliki','Bishop'),
+                  ('NG','Nigeria','Abeokuta','Bishop'),
+                  ('NG','Nigeria','Abuja','Archbishop'),
+                  ('NG','Nigeria','Aguleri','Bishop'),
+                  ('NG','Nigeria','Ahiara','Bishop'),
+                  ('NG','Nigeria','Auchi','Bishop'),
+                  ('NG','Nigeria','Awgu','Bishop'),
+                  ('NG','Nigeria','Awka','Bishop'),
+                  ('NG','Nigeria','Bauchi','Bishop'),
+                  ('NG','Nigeria','Benin City','Archbishop'),
+                  ('NG','Nigeria','Bomadi','Bishop'),
+                  ('NG','Nigeria','Calabar','Archbishop'),
+                  ('NG','Nigeria','Ekiti','Bishop'),
+                  ('NG','Nigeria','Ekwulobia','Bishop'),
+                  ('NG','Nigeria','Enugu','Bishop'),
+                  ('NG','Nigeria','Gboko','Bishop'),
+                  ('NG','Nigeria','Ibadan','Archbishop'),
+                  ('NG','Nigeria','Idah','Bishop'),
+                  ('NG','Nigeria','Ijebu-Ode','Bishop'),
+                  ('NG','Nigeria','Ikot Ekpene','Bishop'),
+                  ('NG','Nigeria','Ilorin','Bishop'),
+                  ('NG','Nigeria','Issele-Uku','Bishop'),
+                  ('NG','Nigeria','Jalingo','Bishop'),
+                  ('NG','Nigeria','Jos','Archbishop'),
+                  ('NG','Nigeria','Kaduna','Archbishop'),
+                  ('NG','Nigeria','Kafanchan','Bishop'),
+                  ('NG','Nigeria','Kano','Bishop'),
+                  ('NG','Nigeria','Katsina','Bishop'),
+                  ('NG','Nigeria','Katsina-Ala','Bishop'),
+                  ('NG','Nigeria','Kontagora','Bishop'),
+                  ('NG','Nigeria','Lafia','Bishop'),
+                  ('NG','Nigeria','Lagos','Archbishop'),
+                  ('NG','Nigeria','Lokoja','Bishop'),
+                  ('NG','Nigeria','Maiduguri','Bishop'),
+                  ('NG','Nigeria','Makurdi','Bishop'),
+                  ('NG','Nigeria','Minna','Bishop'),
+                  ('NG','Nigeria','Nnewi','Bishop'),
+                  ('NG','Nigeria','Nsukka','Bishop'),
+                  ('NG','Nigeria','Ogoja','Bishop'),
+                  ('NG','Nigeria','Okigwe','Bishop'),
+                  ('NG','Nigeria','Ondo','Bishop'),
+                  ('NG','Nigeria','Onitsha','Archbishop'),
+                  ('NG','Nigeria','Orlu','Bishop'),
+                  ('NG','Nigeria','Osogbo','Bishop'),
+                  ('NG','Nigeria','Otukpo','Bishop'),
+                  ('NG','Nigeria','Owerri','Archbishop'),
+                  ('NG','Nigeria','Oyo','Bishop'),
+                  ('NG','Nigeria','Pankshin','Bishop'),
+                  ('NG','Nigeria','Port Harcourt','Bishop'),
+                  ('NG','Nigeria','Shendam','Bishop'),
+                  ('NG','Nigeria','Sokoto','Bishop'),
+                  ('NG','Nigeria','Umuahia','Bishop'),
+                  ('NG','Nigeria','Uromi','Bishop'),
+                  ('NG','Nigeria','Uyo','Bishop'),
+                  ('NG','Nigeria','Warri','Bishop'),
+                  ('NG','Nigeria','Wukari','Bishop'),
+                  ('NG','Nigeria','Yola','Bishop'),
+                  ('NG','Nigeria','Zaria','Bishop'),
+                  ('GH','Ghana','Accra','Archbishop'),
+                  ('GH','Ghana','Cape Coast','Archbishop'),
+                  ('GH','Ghana','Damongo','Bishop'),
+                  ('GH','Ghana','Goaso','Bishop'),
+                  ('GH','Ghana','Ho','Bishop'),
+                  ('GH','Ghana','Jasikan','Bishop'),
+                  ('GH','Ghana','Keta-Akatsi','Bishop'),
+                  ('GH','Ghana','Koforidua','Bishop'),
+                  ('GH','Ghana','Konongo-Mampong','Bishop'),
+                  ('GH','Ghana','Kumasi','Archbishop'),
+                  ('GH','Ghana','Navrongo-Bolgatanga','Bishop'),
+                  ('GH','Ghana','Obuasi','Bishop'),
+                  ('GH','Ghana','Sekondi-Takoradi','Bishop'),
+                  ('GH','Ghana','Sunyani','Bishop'),
+                  ('GH','Ghana','Tamale','Archbishop'),
+                  ('GH','Ghana','Techiman','Bishop'),
+                  ('GH','Ghana','Wa','Bishop'),
+                  ('GH','Ghana','Wiawso','Bishop'),
+                  ('GH','Ghana','Yendi','Bishop'),
+                  ('GB','United Kingdom','Aberdeen','Bishop'),
+                  ('GB','United Kingdom','Argyll and The Isles','Bishop'),
+                  ('GB','United Kingdom','Arundel and Brighton','Bishop'),
+                  ('GB','United Kingdom','Birmingham','Archbishop'),
+                  ('GB','United Kingdom','Brentwood','Bishop'),
+                  ('GB','United Kingdom','Cardiff-Menevia','Archbishop'),
+                  ('GB','United Kingdom','Clifton','Bishop'),
+                  ('GB','United Kingdom','Dunkeld','Bishop'),
+                  ('GB','United Kingdom','East Anglia','Bishop'),
+                  ('GB','United Kingdom','Galloway','Bishop'),
+                  ('GB','United Kingdom','Glasgow','Archbishop'),
+                  ('GB','United Kingdom','Hallam','Bishop'),
+                  ('GB','United Kingdom','Hexham and Newcastle','Bishop'),
+                  ('GB','United Kingdom','Lancaster','Bishop'),
+                  ('GB','United Kingdom','Leeds','Bishop'),
+                  ('GB','United Kingdom','Liverpool','Archbishop'),
+                  ('GB','United Kingdom','Middlesbrough','Bishop'),
+                  ('GB','United Kingdom','Motherwell','Bishop'),
+                  ('GB','United Kingdom','Northampton','Bishop'),
+                  ('GB','United Kingdom','Nottingham','Bishop'),
+                  ('GB','United Kingdom','Paisley','Bishop'),
+                  ('GB','United Kingdom','Plymouth','Bishop'),
+                  ('GB','United Kingdom','Portsmouth','Bishop'),
+                  ('GB','United Kingdom','Saint Andrews and Edinburgh','Archbishop'),
+                  ('GB','United Kingdom','Salford','Bishop'),
+                  ('GB','United Kingdom','Shrewsbury','Bishop'),
+                  ('GB','United Kingdom','Southwark','Archbishop'),
+                  ('GB','United Kingdom','Westminster','Archbishop'),
+                  ('GB','United Kingdom','Wrexham','Bishop'),
+                  ('IE','Ireland','Achonry','Bishop'),
+                  ('IE','Ireland','Ardagh (and Clonmacnois)','Bishop'),
+                  ('IE','Ireland','Armagh','Archbishop'),
+                  ('IE','Ireland','Cashel and Emly','Archbishop'),
+                  ('IE','Ireland','Clogher','Bishop'),
+                  ('IE','Ireland','Clonfert','Bishop'),
+                  ('IE','Ireland','Cloyne','Bishop'),
+                  ('IE','Ireland','Cork and Ross','Bishop'),
+                  ('IE','Ireland','Derry','Bishop'),
+                  ('IE','Ireland','Down and Connor','Bishop'),
+                  ('IE','Ireland','Dromore','Bishop'),
+                  ('IE','Ireland','Dublin','Archbishop'),
+                  ('IE','Ireland','Elphin','Bishop'),
+                  ('IE','Ireland','Ferns','Bishop'),
+                  ('IE','Ireland','Galway and Kilmacduagh','Bishop'),
+                  ('IE','Ireland','Kerry','Bishop'),
+                  ('IE','Ireland','Kildare and Leighlin','Bishop'),
+                  ('IE','Ireland','Killala','Bishop'),
+                  ('IE','Ireland','Killaloe','Bishop'),
+                  ('IE','Ireland','Kilmore','Bishop'),
+                  ('IE','Ireland','Limerick','Bishop'),
+                  ('IE','Ireland','Meath','Bishop'),
+                  ('IE','Ireland','Ossory','Bishop'),
+                  ('IE','Ireland','Raphoe','Bishop'),
+                  ('IE','Ireland','Tuam','Archbishop'),
+                  ('IE','Ireland','Waterford and Lismore','Bishop'),
+                  ('US','United States','Albany','Bishop'),
+                  ('US','United States','Alexandria','Bishop'),
+                  ('US','United States','Allentown','Bishop'),
+                  ('US','United States','Altoona-Johnstown','Bishop'),
+                  ('US','United States','Amarillo','Bishop'),
+                  ('US','United States','Anchorage-Juneau','Archbishop'),
+                  ('US','United States','Arlington','Bishop'),
+                  ('US','United States','Atlanta','Archbishop'),
+                  ('US','United States','Austin','Bishop'),
+                  ('US','United States','Baker','Bishop'),
+                  ('US','United States','Baltimore','Archbishop'),
+                  ('US','United States','Baton Rouge','Bishop'),
+                  ('US','United States','Beaumont','Bishop'),
+                  ('US','United States','Belleville','Bishop'),
+                  ('US','United States','Biloxi','Bishop'),
+                  ('US','United States','Birmingham','Bishop'),
+                  ('US','United States','Bismarck','Bishop'),
+                  ('US','United States','Boise City','Bishop'),
+                  ('US','United States','Boston','Archbishop'),
+                  ('US','United States','Bridgeport','Bishop'),
+                  ('US','United States','Brooklyn','Bishop'),
+                  ('US','United States','Brownsville','Bishop'),
+                  ('US','United States','Buffalo','Bishop'),
+                  ('US','United States','Burlington','Bishop'),
+                  ('US','United States','Camden','Bishop'),
+                  ('US','United States','Charleston','Bishop'),
+                  ('US','United States','Charlotte','Bishop'),
+                  ('US','United States','Cheyenne','Bishop'),
+                  ('US','United States','Chicago','Archbishop'),
+                  ('US','United States','Cincinnati','Archbishop'),
+                  ('US','United States','Cleveland','Bishop'),
+                  ('US','United States','Colorado Springs','Bishop'),
+                  ('US','United States','Columbus','Bishop'),
+                  ('US','United States','Corpus Christi','Bishop'),
+                  ('US','United States','Covington','Bishop'),
+                  ('US','United States','Crookston','Bishop'),
+                  ('US','United States','Dallas','Bishop'),
+                  ('US','United States','Davenport','Bishop'),
+                  ('US','United States','Denver','Archbishop'),
+                  ('US','United States','Des Moines','Bishop'),
+                  ('US','United States','Detroit','Archbishop'),
+                  ('US','United States','Dodge City','Bishop'),
+                  ('US','United States','Dubuque','Archbishop'),
+                  ('US','United States','Duluth','Bishop'),
+                  ('US','United States','El Paso','Bishop'),
+                  ('US','United States','Erie','Bishop'),
+                  ('US','United States','Evansville','Bishop'),
+                  ('US','United States','Fairbanks','Bishop'),
+                  ('US','United States','Fall River','Bishop'),
+                  ('US','United States','Fargo','Bishop'),
+                  ('US','United States','Fort Wayne-South Bend','Bishop'),
+                  ('US','United States','Fort Worth','Bishop'),
+                  ('US','United States','Fresno','Bishop'),
+                  ('US','United States','Gallup','Bishop'),
+                  ('US','United States','Galveston-Houston','Archbishop'),
+                  ('US','United States','Gary','Bishop'),
+                  ('US','United States','Gaylord','Bishop'),
+                  ('US','United States','Grand Island','Bishop'),
+                  ('US','United States','Grand Rapids','Bishop'),
+                  ('US','United States','Great Falls-Billings','Bishop'),
+                  ('US','United States','Green Bay','Bishop'),
+                  ('US','United States','Greensburg','Bishop'),
+                  ('US','United States','Harrisburg','Bishop'),
+                  ('US','United States','Hartford','Archbishop'),
+                  ('US','United States','Helena','Bishop'),
+                  ('US','United States','Honolulu','Bishop'),
+                  ('US','United States','Houma-Thibodaux','Bishop'),
+                  ('US','United States','Indianapolis','Archbishop'),
+                  ('US','United States','Jackson','Bishop'),
+                  ('US','United States','Jefferson City','Bishop'),
+                  ('US','United States','Joliet in Illinois','Bishop'),
+                  ('US','United States','Kalamazoo','Bishop'),
+                  ('US','United States','Kansas City in Kansas','Archbishop'),
+                  ('US','United States','Kansas City-Saint Joseph','Bishop'),
+                  ('US','United States','Knoxville','Bishop'),
+                  ('US','United States','La Crosse','Bishop'),
+                  ('US','United States','Lafayette','Bishop'),
+                  ('US','United States','Lafayette in Indiana','Bishop'),
+                  ('US','United States','Lake Charles','Bishop'),
+                  ('US','United States','Lansing','Bishop'),
+                  ('US','United States','Laredo','Bishop'),
+                  ('US','United States','Las Cruces','Bishop'),
+                  ('US','United States','Las Vegas','Archbishop'),
+                  ('US','United States','Lexington','Bishop'),
+                  ('US','United States','Lincoln','Bishop'),
+                  ('US','United States','Little Rock','Bishop'),
+                  ('US','United States','Los Angeles','Archbishop'),
+                  ('US','United States','Louisville','Archbishop'),
+                  ('US','United States','Lubbock','Bishop'),
+                  ('US','United States','Madison','Bishop'),
+                  ('US','United States','Manchester','Bishop'),
+                  ('US','United States','Marquette','Bishop'),
+                  ('US','United States','Memphis','Bishop'),
+                  ('US','United States','Metuchen','Bishop'),
+                  ('US','United States','Miami','Archbishop'),
+                  ('US','United States','Milwaukee','Archbishop'),
+                  ('US','United States','Mobile','Archbishop'),
+                  ('US','United States','Monterey in California','Bishop'),
+                  ('US','United States','Nashville','Bishop'),
+                  ('US','United States','Newark','Archbishop'),
+                  ('US','United States','New Orleans','Archbishop'),
+                  ('US','United States','New Ulm','Bishop'),
+                  ('US','United States','New York','Archbishop'),
+                  ('US','United States','Norwich','Bishop'),
+                  ('US','United States','Oakland','Bishop'),
+                  ('US','United States','Ogdensburg','Bishop'),
+                  ('US','United States','Oklahoma City','Archbishop'),
+                  ('US','United States','Omaha','Archbishop'),
+                  ('US','United States','Orange in California','Bishop'),
+                  ('US','United States','Orlando','Bishop'),
+                  ('US','United States','Owensboro','Bishop'),
+                  ('US','United States','Palm Beach','Bishop'),
+                  ('US','United States','Paterson','Bishop'),
+                  ('US','United States','Pensacola-Tallahassee','Bishop'),
+                  ('US','United States','Peoria','Bishop'),
+                  ('US','United States','Philadelphia','Archbishop'),
+                  ('US','United States','Phoenix','Bishop'),
+                  ('US','United States','Pittsburgh','Bishop'),
+                  ('US','United States','Portland','Bishop'),
+                  ('US','United States','Portland in Oregon','Archbishop'),
+                  ('US','United States','Providence','Bishop'),
+                  ('US','United States','Pueblo','Bishop'),
+                  ('US','United States','Raleigh','Bishop'),
+                  ('US','United States','Rapid City','Bishop'),
+                  ('US','United States','Reno','Bishop'),
+                  ('US','United States','Richmond','Bishop'),
+                  ('US','United States','Rochester','Bishop'),
+                  ('US','United States','Rockford','Bishop'),
+                  ('US','United States','Rockville Centre','Bishop'),
+                  ('US','United States','Sacramento','Bishop'),
+                  ('US','United States','Saginaw','Bishop'),
+                  ('US','United States','Saint Augustine','Bishop'),
+                  ('US','United States','Saint Cloud','Bishop'),
+                  ('US','United States','Saint Louis','Archbishop'),
+                  ('US','United States','Saint Paul and Minneapolis','Archbishop'),
+                  ('US','United States','Saint Petersburg','Bishop'),
+                  ('US','United States','Saint Thomas','Bishop'),
+                  ('US','United States','Salina','Bishop'),
+                  ('US','United States','Salt Lake City','Bishop'),
+                  ('US','United States','San Angelo','Bishop'),
+                  ('US','United States','San Antonio','Archbishop'),
+                  ('US','United States','San Bernardino','Bishop'),
+                  ('US','United States','San Diego','Bishop'),
+                  ('US','United States','San Francisco','Archbishop'),
+                  ('US','United States','San Jose in California','Bishop'),
+                  ('US','United States','Santa Fe','Archbishop'),
+                  ('US','United States','Santa Rosa (in California)','Bishop'),
+                  ('US','United States','Savannah','Bishop'),
+                  ('US','United States','Scranton','Bishop'),
+                  ('US','United States','Seattle','Archbishop'),
+                  ('US','United States','Shreveport','Bishop'),
+                  ('US','United States','Sioux City','Bishop'),
+                  ('US','United States','Sioux Falls','Bishop'),
+                  ('US','United States','Spokane','Bishop'),
+                  ('US','United States','Springfield-Cape Girardeau','Bishop'),
+                  ('US','United States','Springfield in Illinois','Bishop'),
+                  ('US','United States','Springfield in Massachusetts','Bishop'),
+                  ('US','United States','Steubenville','Bishop'),
+                  ('US','United States','Stockton','Bishop'),
+                  ('US','United States','Superior','Bishop'),
+                  ('US','United States','Syracuse','Bishop'),
+                  ('US','United States','Toledo (in America)','Bishop'),
+                  ('US','United States','Trenton','Bishop'),
+                  ('US','United States','Tucson','Bishop'),
+                  ('US','United States','Tulsa','Bishop'),
+                  ('US','United States','Tyler','Bishop'),
+                  ('US','United States','Venice','Bishop'),
+                  ('US','United States','Victoria in Texas','Bishop'),
+                  ('US','United States','Washington','Archbishop'),
+                  ('US','United States','Wheeling-Charleston','Bishop'),
+                  ('US','United States','Wichita','Bishop'),
+                  ('US','United States','Wilmington','Bishop'),
+                  ('US','United States','Winona-Rochester','Bishop'),
+                  ('US','United States','Worcester','Bishop'),
+                  ('US','United States','Yakima','Bishop'),
+                  ('US','United States','Youngstown','Bishop')
+              ) AS seed(country_code, country_name, diocese_name, ordinary_title)
+              WHERE NOT EXISTS (
+                SELECT 1
+                FROM diocese d
+                WHERE d.country_code = seed.country_code
+                  AND LOWER(TRIM(d.diocese_name)) = LOWER(TRIM(seed.diocese_name))
+              );

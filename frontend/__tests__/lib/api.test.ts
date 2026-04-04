@@ -3,6 +3,8 @@
  */
 import {
   createCommunionWithExternalBaptismPendingProof,
+  createDiocese,
+  fetchDioceses,
   fetchInviteProfile,
   fetchDashboardCounts,
   fetchDioceseDashboard,
@@ -393,5 +395,87 @@ describe('createCommunionWithExternalBaptismPendingProof', () => {
         externalBaptismPayload
       )
     ).rejects.toThrow('Parish is required for external baptism.');
+  });
+});
+
+describe('diocese API backward compatibility', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    localStorage.clear();
+    localStorage.setItem('church_registry_token', 'jwt-test');
+  });
+
+  it('fetchDioceses maps both legacy name and dioceseName fields', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve([
+        { id: 1, name: 'Legacy Diocese Name' },
+        { id: 2, dioceseName: 'Canonical Diocese Name', countryCode: 'NG', ordinaryName: 'John Doe' },
+      ]),
+    });
+
+    const dioceses = await fetchDioceses();
+
+    expect(dioceses).toEqual([
+      {
+        id: 1,
+        name: 'Legacy Diocese Name',
+        dioceseName: undefined,
+        countryCode: undefined,
+        countryName: undefined,
+        jurisdictionType: undefined,
+        ordinaryName: undefined,
+        ordinaryTitle: undefined,
+      },
+      {
+        id: 2,
+        name: 'Canonical Diocese Name',
+        dioceseName: 'Canonical Diocese Name',
+        countryCode: 'NG',
+        countryName: undefined,
+        jurisdictionType: undefined,
+        ordinaryName: 'John Doe',
+        ordinaryTitle: undefined,
+      },
+    ]);
+  });
+
+  it('createDiocese retries with legacy payload when extended payload is rejected', async () => {
+    const mockFetch = jest.fn()
+      .mockResolvedValueOnce({ ok: false, status: 400, text: () => Promise.resolve('Bad Request') })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ id: 12, dioceseName: 'Diocese of Abuja' }),
+      });
+    global.fetch = mockFetch;
+
+    const result = await createDiocese('Diocese of Abuja', {
+      countryCode: 'NG',
+      countryName: 'Nigeria',
+      ordinaryTitle: 'Most Rev.',
+    });
+
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:8080/api/dioceses',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          dioceseName: 'Diocese of Abuja',
+          countryCode: 'NG',
+          countryName: 'Nigeria',
+          ordinaryTitle: 'Most Rev.',
+        }),
+      }),
+    );
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:8080/api/dioceses',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ dioceseName: 'Diocese of Abuja' }),
+      }),
+    );
+    expect(result).toEqual({ id: 12, dioceseName: 'Diocese of Abuja' });
   });
 });

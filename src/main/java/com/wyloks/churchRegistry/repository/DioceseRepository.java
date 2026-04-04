@@ -17,5 +17,12 @@ public interface DioceseRepository extends JpaRepository<Diocese, Long> {
     @EntityGraph(attributePaths = {"parishes"})
     List<Diocese> findDistinctByParishesIdIn(Set<Long> parishIds);
 
+    List<Diocese> findByCountryCodeIgnoreCaseOrderByDioceseNameAsc(String countryCode);
+
+    List<Diocese> findByCountryCodeIgnoreCaseAndDioceseNameContainingIgnoreCaseOrderByDioceseNameAsc(
+            String countryCode,
+            String query
+    );
+
     boolean existsByDioceseNameIgnoreCase(String dioceseName);
 }

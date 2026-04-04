@@ -13,6 +13,8 @@ public interface DioceseService {
 
     List<DioceseWithParishesResponse> findDiocesesWithParishes();
 
+    List<DioceseResponse> searchByCountryAndQuery(String countryCode, String query);
+
     Optional<DioceseResponse> findById(Long id);
 
     DioceseResponse create(DioceseRequest request);

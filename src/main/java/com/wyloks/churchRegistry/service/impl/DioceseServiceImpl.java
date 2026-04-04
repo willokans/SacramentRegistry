@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -65,6 +66,42 @@ public class DioceseServiceImpl implements DioceseService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<DioceseResponse> searchByCountryAndQuery(String countryCode, String query) {
+        String normalizedCountryCode = normalizeCountryCode(countryCode);
+        String normalizedQuery = normalizeQuery(query);
+
+        CurrentUserAccessService.CurrentUserAccess currentUser = currentUserAccessService.currentUser();
+        if (currentUser.isAdmin()) {
+            return (normalizedQuery == null
+                    ? dioceseRepository.findByCountryCodeIgnoreCaseOrderByDioceseNameAsc(normalizedCountryCode)
+                    : dioceseRepository.findByCountryCodeIgnoreCaseAndDioceseNameContainingIgnoreCaseOrderByDioceseNameAsc(
+                            normalizedCountryCode,
+                            normalizedQuery
+                    ))
+                    .stream()
+                    .map(this::toResponse)
+                    .collect(Collectors.toList());
+        }
+
+        if (currentUser.parishIds().isEmpty()) {
+            return List.of();
+        }
+
+        String loweredQuery = normalizedQuery == null ? null : normalizedQuery.toLowerCase(Locale.ROOT);
+        return dioceseRepository.findDistinctByParishesIdIn(currentUser.parishIds()).stream()
+                .filter(d -> d.getCountryCode() != null && d.getCountryCode().equalsIgnoreCase(normalizedCountryCode))
+                .filter(d -> loweredQuery == null || (d.getDioceseName() != null
+                        && d.getDioceseName().toLowerCase(Locale.ROOT).contains(loweredQuery)))
+                .sorted((left, right) -> String.CASE_INSENSITIVE_ORDER.compare(
+                        left.getDioceseName() == null ? "" : left.getDioceseName(),
+                        right.getDioceseName() == null ? "" : right.getDioceseName()
+                ))
+                .map(this::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<DioceseResponse> findById(Long id) {
         return dioceseRepository.findById(id).map(this::toResponse);
     }
@@ -82,6 +119,10 @@ public class DioceseServiceImpl implements DioceseService {
                 .dioceseName(name)
                 .code(request.getCode())
                 .description(request.getDescription())
+                .countryCode(normalizeOptionalCountryCode(request.getCountryCode()))
+                .countryName(normalizeOptionalText(request.getCountryName()))
+                .ordinaryName(normalizeOptionalText(request.getOrdinaryName()))
+                .ordinaryTitle(normalizeOptionalText(request.getOrdinaryTitle()))
                 .build();
         entity = dioceseRepository.save(entity);
         return toResponse(entity);
@@ -93,6 +134,10 @@ public class DioceseServiceImpl implements DioceseService {
                 .dioceseName(e.getDioceseName())
                 .code(e.getCode())
                 .description(e.getDescription())
+                .countryCode(e.getCountryCode())
+                .countryName(e.getCountryName())
+                .ordinaryName(e.getOrdinaryName())
+                .ordinaryTitle(e.getOrdinaryTitle())
                 .build();
     }
 
@@ -120,6 +165,34 @@ public class DioceseServiceImpl implements DioceseService {
                 .description(p.getDescription())
                 .requireMarriageConfirmation(p.isRequireMarriageConfirmation())
                 .build();
+    }
+
+    private String normalizeCountryCode(String countryCode) {
+        if (countryCode == null || countryCode.trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "countryCode is required");
+        }
+        return countryCode.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizeQuery(String query) {
+        if (query == null) {
+            return null;
+        }
+        String trimmed = query.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String normalizeOptionalText(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String normalizeOptionalCountryCode(String countryCode) {
+        String normalized = normalizeOptionalText(countryCode);
+        return normalized == null ? null : normalized.toUpperCase(Locale.ROOT);
     }
 
     private void requireAdminRole() {

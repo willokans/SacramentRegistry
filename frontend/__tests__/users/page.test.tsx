@@ -11,8 +11,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import UsersPage from '@/app/users/page';
 import {
   searchUsersWithParishAccess,
-  fetchDioceses,
-  fetchParishes,
+  fetchDiocesesWithParishes,
   replaceUserParishAccess,
   getLatestUserInvitation,
   resendUserInvitation,
@@ -30,8 +29,7 @@ jest.mock('@/lib/api', () => ({
   getStoredToken: jest.fn(),
   getStoredUser: jest.fn(),
   searchUsersWithParishAccess: jest.fn(),
-  fetchDioceses: jest.fn(),
-  fetchParishes: jest.fn(),
+  fetchDiocesesWithParishes: jest.fn(),
   replaceUserParishAccess: jest.fn(),
   getLatestUserInvitation: jest.fn(),
   resendUserInvitation: jest.fn(),
@@ -65,11 +63,11 @@ const mockUsers = [
   },
 ];
 
-const mockDioceses = [{ id: 1, name: 'Lagos' }];
 const mockParishes = [
   { id: 10, parishName: 'St Mary', dioceseId: 1 },
   { id: 11, parishName: 'St John', dioceseId: 1 },
 ];
+const mockDiocesesWithParishes = [{ id: 1, dioceseName: 'Lagos', parishes: mockParishes }];
 
 describe('Users page (User Access)', () => {
   beforeEach(() => {
@@ -96,20 +94,18 @@ describe('Users page (User Access)', () => {
       numberOfElements: mockUsers.length,
       empty: false,
     });
-    (fetchDioceses as jest.Mock).mockResolvedValue(mockDioceses);
-    (fetchParishes as jest.Mock).mockResolvedValue(mockParishes);
+    (fetchDiocesesWithParishes as jest.Mock).mockResolvedValue(mockDiocesesWithParishes);
     (replaceUserParishAccess as jest.Mock).mockClear();
     (getLatestUserInvitation as jest.Mock).mockResolvedValue(null);
     (resendUserInvitation as jest.Mock).mockClear();
   });
 
-  it('fetches users and dioceses on load', async () => {
+  it('fetches users and dioceses/parishes on load', async () => {
     render(<UsersPage />);
     await waitFor(() => {
       expect(searchUsersWithParishAccess).toHaveBeenCalledWith('', 0, 20);
-      expect(fetchDioceses).toHaveBeenCalled();
+      expect(fetchDiocesesWithParishes).toHaveBeenCalled();
     });
-    expect(fetchParishes).toHaveBeenCalledWith(1);
   });
 
   it('shows User Parish Access heading and description', async () => {
@@ -275,7 +271,7 @@ describe('Users page (User Access)', () => {
       expect(screen.getByRole('heading', { name: /user parish access/i })).toBeInTheDocument();
     });
     expect(searchUsersWithParishAccess).toHaveBeenCalled();
-    expect(fetchDioceses).toHaveBeenCalled();
+    expect(fetchDiocesesWithParishes).toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
   });
 

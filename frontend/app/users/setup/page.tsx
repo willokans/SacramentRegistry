@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import AuthenticatedLayout from '@/components/AuthenticatedLayout';
@@ -9,8 +9,7 @@ import {
   createUser,
   issueUserInvitation,
   resendUserInvitation,
-  fetchDioceses,
-  fetchParishes,
+  fetchDiocesesWithParishes,
   type IssueUserInvitationResponse,
   type DioceseResponse,
   type ParishResponse,
@@ -54,11 +53,15 @@ export default function UserSetupPage() {
     setLoading(true);
     setError(null);
     try {
-      const dioceseList = await fetchDioceses();
+      const dioceseListWithParishes = await fetchDiocesesWithParishes();
+      const dioceseList: DioceseResponse[] = dioceseListWithParishes.map((d) => ({
+        id: d.id,
+        name: d.dioceseName,
+        dioceseName: d.dioceseName,
+      }));
       const byDiocese: Record<number, ParishResponse[]> = {};
-      for (const d of dioceseList) {
-        const parishes = await fetchParishes(d.id);
-        byDiocese[d.id] = parishes;
+      for (const d of dioceseListWithParishes) {
+        byDiocese[d.id] = d.parishes ?? [];
       }
       setDioceses(dioceseList);
       setParishesByDiocese(byDiocese);
@@ -95,7 +98,7 @@ export default function UserSetupPage() {
   return (
     <AuthenticatedLayout>
       <Link href="/settings" prefetch={false} className="text-sm font-medium text-sancta-maroon hover:underline">
-        ← Settings
+        ← Administration
       </Link>
       <h1 className="mt-3 text-2xl font-serif font-semibold text-sancta-maroon">
         User Setup
@@ -223,24 +226,63 @@ function CreateUserForm({
   const [defaultPassword, setDefaultPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [saving, setSaving] = useState(false);
+  const [parishSearch, setParishSearch] = useState('');
 
   const allParishes = Object.values(parishesByDiocese).flat();
-  const assignedParishes = allParishes.filter((p) => parishIds.has(p.id));
+  const selectedParishes = allParishes
+    .filter((p) => parishIds.has(p.id))
+    .sort((a, b) => a.parishName.localeCompare(b.parishName));
+  const dioceseNameById = useMemo(
+    () =>
+      Object.fromEntries(
+        dioceses.map((d) => [d.id, d.name || d.dioceseName || `Diocese ${d.id}`])
+      ) as Record<number, string>,
+    [dioceses],
+  );
+  const filteredAvailableParishes = useMemo(() => {
+    const normalizedQuery = parishSearch.trim().toLowerCase();
+    return allParishes
+      .filter((p) => !parishIds.has(p.id))
+      .filter((p) => {
+        if (!normalizedQuery) return true;
+        const dioceseName = (dioceseNameById[p.dioceseId] ?? '').toLowerCase();
+        return (
+          p.parishName.toLowerCase().includes(normalizedQuery) ||
+          dioceseName.includes(normalizedQuery)
+        );
+      })
+      .sort((a, b) => a.parishName.localeCompare(b.parishName));
+  }, [allParishes, parishIds, parishSearch, dioceseNameById]);
+  const availableDioceseLabel = useMemo(() => {
+    const dioceseIds = Array.from(new Set(filteredAvailableParishes.map((p) => p.dioceseId)));
+    if (dioceseIds.length === 1) {
+      const name = dioceseNameById[dioceseIds[0]] ?? 'Selected Diocese';
+      return `${name} Diocese`;
+    }
+    return 'Multiple Dioceses';
+  }, [filteredAvailableParishes, dioceseNameById]);
   const defaultMustBeAssigned =
     defaultParishId != null && defaultParishId > 0 && !parishIds.has(defaultParishId);
   const passwordsMatch = defaultPassword === confirmPassword;
   const passwordValid = defaultPassword.length >= 8;
 
-  const toggleParish = (id: number) => {
+  const addParish = (id: number) => {
     setParishIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      next.add(id);
       return next;
     });
+    setDefaultParishId((prev) => prev ?? id);
+    onError('');
+  };
+
+  const removeParish = (id: number) => {
+    setParishIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    setDefaultParishId((prev) => (prev === id ? null : prev));
     onError('');
   };
 
@@ -322,8 +364,11 @@ function CreateUserForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="max-w-2xl rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
+      className="max-w-3xl rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
     >
+      <h2 className="text-3xl font-serif font-semibold text-sancta-maroon">User Setup</h2>
+      <p className="mt-1 text-gray-500">Create new users. The user must reset their password on first login.</p>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="title" className="block text-sm font-medium text-gray-700">
@@ -429,77 +474,107 @@ function CreateUserForm({
         </select>
       </div>
 
-      <div className="mt-4">
-        <label className="block text-sm font-medium text-gray-700">
-          Parish access
-        </label>
-        <p className="mt-0.5 text-xs text-gray-500">
-          Select parishes this user can access.
+      <div className="mt-6">
+        <h3 className="text-3xl font-serif font-semibold text-sancta-maroon">Parish Access</h3>
+        <p className="mt-1 text-gray-600">
+          Search parishes, add them to this user, then pick a default parish.
         </p>
-        <div className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50/50 p-2">
-          {dioceses.length === 0 ? (
-            <p className="text-sm text-gray-500">No parishes available. Add dioceses and parishes first.</p>
-          ) : (
-            dioceses.map((d) => (
-              <div key={d.id} className="mb-3 last:mb-0">
-                <p className="mb-1 text-xs font-medium text-gray-500">{d.name}</p>
-                <ul className="space-y-1">
-                  {(parishesByDiocese[d.id] ?? []).map((p) => (
-                    <li key={p.id}>
-                      <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-white/80">
-                        <input
-                          type="checkbox"
-                          checked={parishIds.has(p.id)}
-                          onChange={() => toggleParish(p.id)}
-                          className="rounded border-gray-300 text-sancta-maroon focus:ring-sancta-maroon"
-                        />
-                        <span className="text-sm">{p.parishName}</span>
-                      </label>
-                    </li>
-                  ))}
+
+        <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50/50 p-3">
+          <label htmlFor="parish-search" className="sr-only">
+            Search parish
+          </label>
+          <div className="relative">
+            <input
+              id="parish-search"
+              type="search"
+              value={parishSearch}
+              onChange={(e) => setParishSearch(e.target.value)}
+              placeholder="Search parish..."
+              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 pr-10 text-sm focus:border-sancta-maroon focus:outline-none focus:ring-1 focus:ring-sancta-maroon"
+            />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">⌕</span>
+          </div>
+
+          <div className="mt-3 max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white">
+            {dioceses.length === 0 ? (
+              <p className="p-3 text-sm text-gray-500">No parishes available. Add dioceses and parishes first.</p>
+            ) : filteredAvailableParishes.length === 0 ? (
+              <p className="p-3 text-sm text-gray-500">No available parishes match your search.</p>
+            ) : (
+              <div className="p-3">
+                <p className="mb-2 text-sm font-semibold text-gray-700">
+                  Available Parishes <span className="font-normal text-gray-500">({availableDioceseLabel})</span>
+                </p>
+                <ul role="list" className="divide-y divide-gray-100">
+                {filteredAvailableParishes.map((p) => (
+                  <li key={p.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                    <p className="min-w-0 truncate text-sm text-gray-900">{p.parishName}</p>
+                    <button
+                      type="button"
+                      onClick={() => addParish(p.id)}
+                      className="shrink-0 rounded-md border border-sancta-maroon/40 px-3 py-1 text-xs font-medium text-sancta-maroon hover:bg-sancta-maroon/5"
+                    >
+                      + Add
+                    </button>
+                  </li>
+                ))}
                 </ul>
               </div>
-            ))
+            )}
+          </div>
+        </div>
+
+        <div className="mt-3">
+          <h4 className="text-3xl font-serif font-semibold text-sancta-maroon">Selected Parishes</h4>
+          {selectedParishes.length === 0 ? (
+            <p className="mt-1 text-xs text-gray-500">No parish selected yet.</p>
+          ) : (
+            <ul className="mt-2 space-y-2 rounded-lg border border-gray-200 bg-white p-2">
+              {selectedParishes.map((p) => (
+                <li key={p.id} className="flex items-center justify-between gap-3 rounded-md bg-gray-50 px-3 py-2">
+                  <span className="min-w-0 truncate text-sm text-gray-900">{p.parishName}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeParish(p.id)}
+                    className="shrink-0 rounded-md border border-red-300 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       </div>
 
-      <div className="mt-4">
-        <label htmlFor="default-parish" className="block text-sm font-medium text-gray-700">
-          Default parish
-        </label>
-        <p className="mt-0.5 text-xs text-gray-500">
-          The parish shown when this user logs in. Must be one of the assigned parishes.
-        </p>
-        <select
-          id="default-parish"
-          value={defaultParishId ?? ''}
-          onChange={(e) => {
-            const v = e.target.value;
-            setDefaultParishId(v ? Number(v) : null);
-          }}
-          className={`mt-2 w-full rounded-lg border px-3 py-2 text-sm focus:border-sancta-maroon focus:outline-none focus:ring-1 focus:ring-sancta-maroon ${
-            defaultMustBeAssigned ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-white'
-          }`}
-        >
-          <option value="">No default</option>
-          {assignedParishes.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.parishName}
-            </option>
-          ))}
-          {parishIds.size > 0 && assignedParishes.length === 0 && (
-            <option value="" disabled>
-              No parishes selected
-            </option>
-          )}
-        </select>
-        {defaultMustBeAssigned && (
-          <p className="mt-1 text-xs text-red-600">
-            Default parish must be one of the assigned parishes.
+      {selectedParishes.length > 0 ? (
+        <div className="mt-4">
+          <h4 className="text-3xl font-serif font-semibold text-sancta-maroon">Default Parish</h4>
+          <p className="mt-0.5 text-xs text-gray-500">
+            Select the parish shown when this user logs in.
           </p>
-        )}
-      </div>
+          <div className="mt-2 space-y-2 rounded-lg border border-gray-200 bg-white p-3">
+            {selectedParishes.map((p) => (
+              <label key={p.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-gray-50">
+                <input
+                  type="radio"
+                  name="default-parish-radio"
+                  checked={defaultParishId === p.id}
+                  onChange={() => setDefaultParishId(p.id)}
+                  className="border-gray-300 text-sancta-maroon focus:ring-sancta-maroon"
+                />
+                <span className="text-sm text-gray-900">{p.parishName}</span>
+              </label>
+            ))}
+          </div>
+          {defaultMustBeAssigned && (
+            <p className="mt-1 text-xs text-red-600">
+              Default parish must be one of the assigned parishes.
+            </p>
+          )}
+        </div>
+      ) : null}
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div>

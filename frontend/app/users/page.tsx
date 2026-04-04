@@ -10,8 +10,7 @@ import {
   replaceUserParishAccess,
   getLatestUserInvitation,
   resendUserInvitation,
-  fetchDioceses,
-  fetchParishes,
+  fetchDiocesesWithParishes,
   type IssueUserInvitationResponse,
   type UserParishAccessResponse,
   type DioceseResponse,
@@ -58,11 +57,15 @@ export default function UsersPage() {
     setLoading(true);
     setError(null);
     try {
-      const dioceseList = await fetchDioceses();
+      const dioceseListWithParishes = await fetchDiocesesWithParishes();
+      const dioceseList: DioceseResponse[] = dioceseListWithParishes.map((d) => ({
+        id: d.id,
+        name: d.dioceseName,
+        dioceseName: d.dioceseName,
+      }));
       const byDiocese: Record<number, ParishResponse[]> = {};
-      for (const d of dioceseList) {
-        const parishes = await fetchParishes(d.id);
-        byDiocese[d.id] = parishes;
+      for (const d of dioceseListWithParishes) {
+        byDiocese[d.id] = d.parishes ?? [];
       }
       setDioceses(dioceseList);
       setParishesByDiocese(byDiocese);
@@ -169,7 +172,7 @@ export default function UsersPage() {
   return (
     <AuthenticatedLayout>
       <Link href="/settings" prefetch={false} className="text-sm font-medium text-sancta-maroon hover:underline">
-        ← Settings
+        ← Administration
       </Link>
       <h1 className="mt-3 text-2xl font-serif font-semibold text-sancta-maroon">
         User Parish Access

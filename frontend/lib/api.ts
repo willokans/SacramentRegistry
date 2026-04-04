@@ -438,6 +438,11 @@ export interface DioceseResponse {
   id: number;
   name: string;
   dioceseName?: string;
+  countryCode?: string;
+  countryName?: string;
+  jurisdictionType?: string;
+  ordinaryName?: string;
+  ordinaryTitle?: string;
 }
 
 export async function fetchDioceses(): Promise<DioceseResponse[]> {
@@ -452,6 +457,41 @@ export async function fetchDioceses(): Promise<DioceseResponse[]> {
       id: Number.isNaN(id) ? 0 : id,
       name: resolvedName || `Diocese ${Number.isNaN(id) ? '' : id}`.trim(),
       dioceseName: item?.dioceseName,
+      countryCode: typeof item?.countryCode === 'string' ? item.countryCode : undefined,
+      countryName: typeof item?.countryName === 'string' ? item.countryName : undefined,
+      jurisdictionType: typeof item?.jurisdictionType === 'string' ? item.jurisdictionType : undefined,
+      ordinaryName: typeof item?.ordinaryName === 'string' ? item.ordinaryName : undefined,
+      ordinaryTitle: typeof item?.ordinaryTitle === 'string' ? item.ordinaryTitle : undefined,
+    };
+  }).filter((d) => d.id > 0);
+}
+
+export async function searchDioceses(countryCode: string, query?: string): Promise<DioceseResponse[]> {
+  const normalizedCountryCode = countryCode.trim().toUpperCase();
+  if (!normalizedCountryCode) return [];
+
+  const params = new URLSearchParams({ countryCode: normalizedCountryCode });
+  const normalizedQuery = query?.trim();
+  if (normalizedQuery) params.set('q', normalizedQuery);
+
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/dioceses/search?${params.toString()}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) throw new Error(res.status === 401 ? 'Unauthorized' : 'Failed to search dioceses');
+  const raw = await res.json();
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item: any) => {
+    const id = Number(item?.id);
+    const resolvedName = String(item?.name ?? item?.dioceseName ?? '').trim();
+    return {
+      id: Number.isNaN(id) ? 0 : id,
+      name: resolvedName || `Diocese ${Number.isNaN(id) ? '' : id}`.trim(),
+      dioceseName: item?.dioceseName,
+      countryCode: typeof item?.countryCode === 'string' ? item.countryCode : undefined,
+      countryName: typeof item?.countryName === 'string' ? item.countryName : undefined,
+      jurisdictionType: typeof item?.jurisdictionType === 'string' ? item.jurisdictionType : undefined,
+      ordinaryName: typeof item?.ordinaryName === 'string' ? item.ordinaryName : undefined,
+      ordinaryTitle: typeof item?.ordinaryTitle === 'string' ? item.ordinaryTitle : undefined,
     };
   }).filter((d) => d.id > 0);
 }
@@ -477,12 +517,37 @@ export async function fetchParishes(dioceseId: number): Promise<ParishResponse[]
   return res.json();
 }
 
-export async function createDiocese(name: string): Promise<DioceseResponse> {
-  const res = await fetchWithRetry(`${getBaseUrl()}/api/dioceses`, {
+type CreateDioceseOptions = {
+  countryCode?: string;
+  countryName?: string;
+  jurisdictionType?: string;
+  ordinaryName?: string;
+  ordinaryTitle?: string;
+};
+
+export async function createDiocese(name: string, options: CreateDioceseOptions = {}): Promise<DioceseResponse> {
+  const payload = {
+    dioceseName: name,
+    ...(options.countryCode ? { countryCode: options.countryCode } : {}),
+    ...(options.countryName ? { countryName: options.countryName } : {}),
+    ...(options.jurisdictionType ? { jurisdictionType: options.jurisdictionType } : {}),
+    ...(options.ordinaryName ? { ordinaryName: options.ordinaryName } : {}),
+    ...(options.ordinaryTitle ? { ordinaryTitle: options.ordinaryTitle } : {}),
+  };
+
+  let res = await fetchWithRetry(`${getBaseUrl()}/api/dioceses`, {
     method: 'POST',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ dioceseName: name }),
+    body: JSON.stringify(payload),
   });
+  if (!res.ok && Object.keys(options).length > 0) {
+    // Retry with the legacy payload so older backend deployments still accept diocese creation.
+    res = await fetchWithRetry(`${getBaseUrl()}/api/dioceses`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ dioceseName: name }),
+    });
+  }
   if (!res.ok) {
     const text = await res.text();
     throw new Error(parseErrorResponse(text, 'Failed to create diocese'));

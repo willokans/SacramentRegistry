@@ -129,7 +129,7 @@ export default function MarriageRequirementsSettingsPage() {
             prefetch={false}
             className="text-sm font-medium text-sancta-maroon hover:underline"
           >
-            ← Settings
+            ← Administration
           </Link>
           <h1 className="mt-3 text-2xl font-serif font-semibold text-sancta-maroon">Marriage requirements</h1>
           <p className="mt-1 text-sm text-gray-500">

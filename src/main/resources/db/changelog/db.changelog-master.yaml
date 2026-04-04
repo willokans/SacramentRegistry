@@ -221,3 +221,5 @@ databaseChangeLog:
       file: db/changelog/changes/024-user-invitation-acceptance-audit-metadata.yaml
   - include:
       file: db/changelog/changes/025-user-invitation-email-delivery-tracking.yaml
+  - include:
+      file: db/changelog/changes/026-diocese-country-and-ordinary-fields.yaml

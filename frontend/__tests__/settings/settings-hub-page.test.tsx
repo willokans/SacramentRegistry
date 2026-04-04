@@ -1,5 +1,5 @@
 /**
- * Settings hub lists admin tools including marriage requirements.
+ * Administration hub lists admin tools including marriage requirements.
  */
 import { render, screen, waitFor } from '@testing-library/react';
 import { useRouter, usePathname } from 'next/navigation';
@@ -25,7 +25,7 @@ jest.mock('@/context/ParishContext', () => ({
 
 const mockReplace = jest.fn();
 
-describe('Settings hub page', () => {
+describe('Administration hub page', () => {
   beforeEach(() => {
     mockReplace.mockClear();
     (useRouter as jest.Mock).mockReturnValue({ replace: mockReplace, push: jest.fn() });
@@ -42,7 +42,7 @@ describe('Settings hub page', () => {
   it('shows link to marriage requirements for admin', async () => {
     render(<SettingsHubPage />);
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: /settings/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /administration/i })).toBeInTheDocument();
     });
     const marriageReqLink = screen
       .getAllByRole('link')
@@ -50,7 +50,18 @@ describe('Settings hub page', () => {
     expect(marriageReqLink).toBeTruthy();
   });
 
-  it('redirects priest away from settings hub', () => {
+  it('shows directory management link for admin', async () => {
+    render(<SettingsHubPage />);
+    await waitFor(() => {
+      expect(screen.getAllByRole('link', { name: /directory management/i }).length).toBeGreaterThan(0);
+    });
+    const directoryLink = screen
+      .getAllByRole('link')
+      .find((l) => l.getAttribute('href') === '/parishes');
+    expect(directoryLink).toBeTruthy();
+  });
+
+  it('redirects priest away from administration hub', () => {
     (getStoredUser as jest.Mock).mockReturnValue({
       username: 'priest',
       role: 'PRIEST',
