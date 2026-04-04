@@ -6,8 +6,8 @@ import com.wyloks.churchRegistry.entity.UserInvitation;
 import com.wyloks.churchRegistry.service.InvitationEmailService;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -25,12 +25,20 @@ import java.util.Locale;
 import java.util.Set;
 
 @Service
-@RequiredArgsConstructor
 public class InvitationEmailServiceImpl implements InvitationEmailService {
 
-    private final JavaMailSender mailSender;
+    @Autowired(required = false)
+    private JavaMailSender mailSender;
 
-    @Value("${app.invitation.accept-base-url}")
+    public InvitationEmailServiceImpl() {
+        // Spring default constructor
+    }
+
+    public InvitationEmailServiceImpl(JavaMailSender mailSender) {
+        this.mailSender = mailSender;
+    }
+
+    @Value("${app.invitation.accept-base-url:http://localhost:3000/accept-invite}")
     private String invitationAcceptBaseUrl;
 
     @Value("${app.invitation.email.from:onboarding@sacramentregistry.com}")
@@ -64,16 +72,24 @@ public class InvitationEmailServiceImpl implements InvitationEmailService {
         String htmlBody = buildHtmlBody(greetingName, parishNames, inviterName, assignedRole, acceptUrl, expiryText);
 
         try {
-            MimeMessage message = mailSender.createMimeMessage();
+            JavaMailSender resolvedMailSender = resolveMailSender();
+            MimeMessage message = resolvedMailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
             helper.setFrom(sanitizeHeaderValue(fromAddress));
             helper.setTo(recipient);
             helper.setSubject(subject);
             helper.setText(plainTextBody, htmlBody);
-            mailSender.send(message);
+            resolvedMailSender.send(message);
         } catch (MessagingException ex) {
             throw new IllegalStateException("Failed to construct invitation email message", ex);
         }
+    }
+
+    private JavaMailSender resolveMailSender() {
+        if (mailSender == null) {
+            throw new IllegalStateException("Invitation email delivery is not configured");
+        }
+        return mailSender;
     }
 
     private String buildAcceptUrl(String rawToken) {
