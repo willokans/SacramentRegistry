@@ -7,6 +7,8 @@ import AuthenticatedLayout from '@/components/AuthenticatedLayout';
 import { useParish } from '@/context/ParishContext';
 import {
   getStoredUser,
+  fetchDioceses,
+  fetchParishes,
   fetchDiocesesWithParishes,
   fetchParishMarriageRequirements,
   patchParishMarriageRequirements,
@@ -44,18 +46,31 @@ export default function MarriageRequirementsSettingsPage() {
     setLoading(true);
     setError(null);
     try {
-      const dioceseListWithParishes = await fetchDiocesesWithParishes();
-      const dioceseList: DioceseResponse[] = dioceseListWithParishes.map((d) => ({
-        id: d.id,
-        name: d.dioceseName,
-        dioceseName: d.dioceseName,
-      }));
-      const byDiocese: Record<number, ParishResponse[]> = {};
-      for (const d of dioceseListWithParishes) {
-        byDiocese[d.id] = d.parishes ?? [];
+      try {
+        const dioceseListWithParishes = await withTimeout(fetchDiocesesWithParishes(), 8000);
+        const dioceseList: DioceseResponse[] = dioceseListWithParishes.map((d) => ({
+          id: d.id,
+          name: d.dioceseName,
+          dioceseName: d.dioceseName,
+        }));
+        const byDiocese: Record<number, ParishResponse[]> = {};
+        for (const d of dioceseListWithParishes) {
+          byDiocese[d.id] = d.parishes ?? [];
+        }
+        setDioceses(dioceseList);
+        setParishesByDiocese(byDiocese);
+      } catch {
+        // Staging safety: if the batched endpoint is missing/slow, fall back to legacy requests.
+        const dioceseList = await fetchDioceses();
+        const byDiocese: Record<number, ParishResponse[]> = {};
+        await Promise.all(
+          dioceseList.map(async (d) => {
+            byDiocese[d.id] = await fetchParishes(d.id);
+          }),
+        );
+        setDioceses(dioceseList);
+        setParishesByDiocese(byDiocese);
       }
-      setDioceses(dioceseList);
-      setParishesByDiocese(byDiocese);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
@@ -285,4 +300,13 @@ export default function MarriageRequirementsSettingsPage() {
       </div>
     </AuthenticatedLayout>
   );
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error('Request timed out')), timeoutMs),
+    ),
+  ]);
 }
