@@ -8,6 +8,7 @@ import com.wyloks.churchRegistry.dto.ParishResponse;
 import com.wyloks.churchRegistry.entity.Diocese;
 import com.wyloks.churchRegistry.entity.Parish;
 import com.wyloks.churchRegistry.repository.DioceseRepository;
+import com.wyloks.churchRegistry.repository.ParishRepository;
 import com.wyloks.churchRegistry.security.CurrentUserAccessService;
 import com.wyloks.churchRegistry.service.DioceseService;
 import com.wyloks.churchRegistry.util.NameUtils;
@@ -25,18 +26,23 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Directory APIs: non–{@code SUPER_ADMIN} users only see dioceses and parishes tied to their assignments
+ * (same Option B rule as {@link com.wyloks.churchRegistry.service.impl.DioceseDashboardServiceImpl}).
+ */
 @Service
 @RequiredArgsConstructor
 public class DioceseServiceImpl implements DioceseService {
 
     private final DioceseRepository dioceseRepository;
+    private final ParishRepository parishRepository;
     private final CurrentUserAccessService currentUserAccessService;
 
     @Override
     @Transactional(readOnly = true)
     public List<DioceseResponse> findAll() {
         CurrentUserAccessService.CurrentUserAccess currentUser = currentUserAccessService.currentUser();
-        List<Diocese> dioceses = currentUser.isAdmin()
+        List<Diocese> dioceses = currentUser.isSuperAdmin()
                 ? dioceseRepository.findAll()
                 : currentUser.parishIds().isEmpty()
                     ? List.of()
@@ -52,13 +58,13 @@ public class DioceseServiceImpl implements DioceseService {
     @Cacheable(cacheNames = CacheConfig.CACHE_DIOCESES_WITH_PARISHES, keyGenerator = "dioceseParishCacheKeyGenerator")
     public List<DioceseWithParishesResponse> findDiocesesWithParishes() {
         CurrentUserAccessService.CurrentUserAccess currentUser = currentUserAccessService.currentUser();
-        List<Diocese> dioceses = currentUser.isAdmin()
+        List<Diocese> dioceses = currentUser.isSuperAdmin()
                 ? dioceseRepository.findAllWithParishes()
                 : currentUser.parishIds().isEmpty()
                     ? List.of()
                     : dioceseRepository.findDistinctByParishesIdIn(currentUser.parishIds());
 
-        Set<Long> allowedParishIds = currentUser.isAdmin() ? null : currentUser.parishIds();
+        Set<Long> allowedParishIds = currentUser.isSuperAdmin() ? null : currentUser.parishIds();
         return dioceses.stream()
                 .map(d -> toResponseWithParishes(d, allowedParishIds))
                 .collect(Collectors.toList());
@@ -71,7 +77,7 @@ public class DioceseServiceImpl implements DioceseService {
         String normalizedQuery = normalizeQuery(query);
 
         CurrentUserAccessService.CurrentUserAccess currentUser = currentUserAccessService.currentUser();
-        if (currentUser.isAdmin()) {
+        if (currentUser.isSuperAdmin()) {
             return (normalizedQuery == null
                     ? dioceseRepository.findByCountryCodeIgnoreCaseOrderByDioceseNameAsc(normalizedCountryCode)
                     : dioceseRepository.findByCountryCodeIgnoreCaseAndDioceseNameContainingIgnoreCaseOrderByDioceseNameAsc(
@@ -103,14 +109,26 @@ public class DioceseServiceImpl implements DioceseService {
     @Override
     @Transactional(readOnly = true)
     public Optional<DioceseResponse> findById(Long id) {
-        return dioceseRepository.findById(id).map(this::toResponse);
+        if (id == null) {
+            return Optional.empty();
+        }
+        return dioceseRepository.findById(id).flatMap(d -> {
+            CurrentUserAccessService.CurrentUserAccess u = currentUserAccessService.currentUser();
+            if (u.isSuperAdmin()) {
+                return Optional.of(toResponse(d));
+            }
+            if (u.parishIds().isEmpty() || parishRepository.findByIdInAndDioceseId(u.parishIds(), id).isEmpty()) {
+                return Optional.empty();
+            }
+            return Optional.of(toResponse(d));
+        });
     }
 
     @Override
     @Transactional
     @CacheEvict(cacheNames = {CacheConfig.CACHE_DIOCESES_WITH_PARISHES, CacheConfig.CACHE_PARISHES_BY_DIOCESE}, allEntries = true)
     public DioceseResponse create(DioceseRequest request) {
-        requireAdminRole();
+        requireSuperAdminRole();
         String name = NameUtils.capitalizeNameOrEmpty(request.getDioceseName());
         if (dioceseRepository.existsByDioceseNameIgnoreCase(name)) {
             throw new IllegalArgumentException("A diocese with that name already exists");
@@ -195,10 +213,10 @@ public class DioceseServiceImpl implements DioceseService {
         return normalized == null ? null : normalized.toUpperCase(Locale.ROOT);
     }
 
-    private void requireAdminRole() {
+    private void requireSuperAdminRole() {
         CurrentUserAccessService.CurrentUserAccess currentUser = currentUserAccessService.currentUser();
-        if (!currentUser.isAdmin()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin role required");
+        if (!currentUser.isSuperAdmin()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Super administrator role required");
         }
     }
 }

@@ -6,14 +6,13 @@ import com.wyloks.churchRegistry.entity.AppUser;
 import com.wyloks.churchRegistry.entity.Parish;
 import com.wyloks.churchRegistry.repository.AppUserRepository;
 import com.wyloks.churchRegistry.repository.ParishRepository;
-import com.wyloks.churchRegistry.security.AppUserDetails;
+import com.wyloks.churchRegistry.security.CurrentUserAccessService;
+import com.wyloks.churchRegistry.security.ParishAccessPolicy;
 import com.wyloks.churchRegistry.service.UserParishAccessService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -21,7 +20,6 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
@@ -33,12 +31,21 @@ public class UserParishAccessServiceImpl implements UserParishAccessService {
 
     private final AppUserRepository appUserRepository;
     private final ParishRepository parishRepository;
+    private final CurrentUserAccessService currentUserAccessService;
 
     @Override
     @Transactional(readOnly = true)
     public List<UserParishAccessResponse> listAllUsersWithParishAccess() {
-        requireAdmin();
-        return appUserRepository.findAllByOrderByUsernameAsc().stream()
+        CurrentUserAccessService.CurrentUserAccess actor = requireAdmin();
+        if (actor.isSuperAdmin()) {
+            return appUserRepository.findAllByOrderByUsernameAsc().stream()
+                    .map(this::toResponse)
+                    .toList();
+        }
+        if (actor.parishIds().isEmpty()) {
+            return List.of();
+        }
+        return appUserRepository.findWithParishOverlapOrderByUsernameAsc(actor.parishIds()).stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -46,30 +53,46 @@ public class UserParishAccessServiceImpl implements UserParishAccessService {
     @Override
     @Transactional(readOnly = true)
     public Page<UserParishAccessResponse> searchUsersWithParishAccess(String query, Pageable pageable) {
-        requireAdmin();
+        CurrentUserAccessService.CurrentUserAccess actor = requireAdmin();
+        if (actor.isSuperAdmin()) {
+            String normalizedQuery = query == null ? "" : query.trim();
+            return appUserRepository.searchByUserMetadata(normalizedQuery, pageable)
+                    .map(this::toResponse);
+        }
+        if (actor.parishIds().isEmpty()) {
+            return Page.empty(pageable);
+        }
         String normalizedQuery = query == null ? "" : query.trim();
-        return appUserRepository.searchByUserMetadata(normalizedQuery, pageable)
+        return appUserRepository.searchByUserMetadataWithParishOverlap(actor.parishIds(), normalizedQuery, pageable)
                 .map(this::toResponse);
     }
 
     @Override
     @Transactional(readOnly = true)
     public UserParishAccessResponse getUserParishAccess(Long userId) {
-        requireAdmin();
+        CurrentUserAccessService.CurrentUserAccess actor = requireAdmin();
         AppUser user = appUserRepository.findWithParishAccessesById(userId)
                 .orElseThrow(() -> notFound("User not found: " + userId));
+        requireMutualParishVisibility(actor, user);
         return toResponse(user);
     }
 
     @Override
     @Transactional
     public UserParishAccessResponse replaceUserParishAccess(Long userId, ReplaceUserParishAccessRequest request) {
-        requireAdmin();
+        CurrentUserAccessService.CurrentUserAccess actor = requireAdmin();
 
         AppUser user = appUserRepository.findWithParishAccessesById(userId)
                 .orElseThrow(() -> notFound("User not found: " + userId));
+        requireMutualParishVisibility(actor, user);
 
         Set<Long> requestedParishIds = normalizeParishIds(request);
+        if (!actor.isSuperAdmin()) {
+            if (!actor.parishIds().containsAll(requestedParishIds)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot assign parishes outside your scope");
+            }
+        }
+
         List<Parish> parishes = requestedParishIds.isEmpty()
                 ? List.of()
                 : parishRepository.findByIdIn(requestedParishIds);
@@ -94,6 +117,23 @@ public class UserParishAccessServiceImpl implements UserParishAccessService {
         user.setParish(defaultParish);
 
         return toResponse(appUserRepository.save(user));
+    }
+
+    private void requireMutualParishVisibility(CurrentUserAccessService.CurrentUserAccess actor, AppUser targetUser) {
+        if (actor.isSuperAdmin()) {
+            return;
+        }
+        if (!ParishAccessPolicy.sharesParishWithActor(actor.parishIds(), targetUser)) {
+            throw notFound("User not found: " + targetUser.getId());
+        }
+    }
+
+    private CurrentUserAccessService.CurrentUserAccess requireAdmin() {
+        CurrentUserAccessService.CurrentUserAccess currentUser = currentUserAccessService.currentUser();
+        if (!currentUser.isAdmin()) {
+            throw forbidden("Admin or Super Admin role required");
+        }
+        return currentUser;
     }
 
     private Set<Long> normalizeParishIds(ReplaceUserParishAccessRequest request) {
@@ -129,28 +169,6 @@ public class UserParishAccessServiceImpl implements UserParishAccessService {
         }
 
         return null;
-    }
-
-    private void requireAdmin() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw forbidden("Authentication required");
-        }
-        Object principal = authentication.getPrincipal();
-        if (!(principal instanceof AppUserDetails userDetails)) {
-            throw forbidden("Invalid authentication principal");
-        }
-        String role = normalizeRole(userDetails.getRole());
-        if (!"ADMIN".equals(role) && !"SUPER_ADMIN".equals(role)) {
-            throw forbidden("Admin or Super Admin role required");
-        }
-    }
-
-    private String normalizeRole(String role) {
-        if (role == null || role.isBlank()) {
-            return null;
-        }
-        return role.trim().toUpperCase(Locale.ROOT);
     }
 
     private UserParishAccessResponse toResponse(AppUser user) {

@@ -92,6 +92,40 @@ public class CacheConfig {
         return new DioceseParishCacheKeyGenerator(currentUserAccessService);
     }
 
+    /**
+     * Diocese dashboard responses must not be shared across users: parish-scoped ADMIN sees different
+     * aggregates than SUPER_ADMIN or another ADMIN.
+     */
+    @Bean
+    public DioceseDashboardCacheKeyGenerator dioceseDashboardCacheKeyGenerator(CurrentUserAccessService currentUserAccessService) {
+        return new DioceseDashboardCacheKeyGenerator(currentUserAccessService);
+    }
+
+    public static class DioceseDashboardCacheKeyGenerator implements org.springframework.cache.interceptor.KeyGenerator {
+
+        private final CurrentUserAccessService currentUserAccessService;
+
+        public DioceseDashboardCacheKeyGenerator(CurrentUserAccessService currentUserAccessService) {
+            this.currentUserAccessService = currentUserAccessService;
+        }
+
+        @Override
+        public Object generate(Object target, java.lang.reflect.Method method, Object... params) {
+            CurrentUserAccessService.CurrentUserAccess currentUser = currentUserAccessService.currentUser();
+            String userKey = currentUser.isSuperAdmin()
+                    ? "super_admin"
+                    : "parishes:" + currentUser.parishIds().stream()
+                            .sorted()
+                            .map(String::valueOf)
+                            .collect(Collectors.joining(","));
+
+            if (params != null && params.length > 0 && params[0] instanceof Long dioceseId) {
+                return "diocese-dashboard:" + dioceseId + "::" + userKey;
+            }
+            return userKey;
+        }
+    }
+
     public static class DioceseParishCacheKeyGenerator implements org.springframework.cache.interceptor.KeyGenerator {
 
         private final CurrentUserAccessService currentUserAccessService;
@@ -103,8 +137,8 @@ public class CacheConfig {
         @Override
         public Object generate(Object target, java.lang.reflect.Method method, Object... params) {
             CurrentUserAccessService.CurrentUserAccess currentUser = currentUserAccessService.currentUser();
-            String userKey = currentUser.isAdmin()
-                    ? "admin"
+            String userKey = currentUser.isSuperAdmin()
+                    ? "super_admin"
                     : "parishes:" + currentUser.parishIds().stream()
                             .sorted()
                             .map(String::valueOf)

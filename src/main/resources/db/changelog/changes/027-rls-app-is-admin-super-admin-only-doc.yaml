@@ -1,0 +1,17 @@
+# Clarifies session semantics: app.is_admin is set true only for SUPER_ADMIN (global RLS bypass).
+# Parish-scoped ADMIN uses app.parish_ids; policies still use app_rls_is_admin() for the super-admin path.
+databaseChangeLog:
+  - changeSet:
+      id: 027-rls-app-is-admin-super-admin-only-doc
+      author: will_okanumeh
+      comment: Document app.is_admin / app_rls_is_admin() as SUPER_ADMIN-only bypass
+      preConditions:
+        - onFail: MARK_RAN
+        - dbms:
+            type: postgresql
+      changes:
+        - sql:
+            sql: |
+              COMMENT ON FUNCTION app_rls_is_admin() IS
+                'True when session variable app.is_admin is true. The API sets app.is_admin only for SUPER_ADMIN (global RLS bypass). Parish-scoped ADMIN uses app.parish_ids only.';
+            splitStatements: false

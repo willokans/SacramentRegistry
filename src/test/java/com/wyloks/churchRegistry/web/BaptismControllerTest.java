@@ -29,7 +29,10 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -140,6 +143,7 @@ class BaptismControllerTest {
 
     @Test
     void getBaptismById_returns200_whenExists() throws Exception {
+        when(sacramentAuthorizationService.requireReadAccessForBaptism(1L)).thenReturn(true);
         BaptismResponse response = BaptismResponse.builder().id(1L).baptismName("John").surname("Doe").build();
         when(baptismService.findById(1L)).thenReturn(java.util.Optional.of(response));
 
@@ -147,13 +151,17 @@ class BaptismControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.baptismName").value("John"));
+
+        verify(sacramentAuthorizationService).requireReadAccessForBaptism(1L);
     }
 
     @Test
     void getBaptismById_returns404_whenNotExists() throws Exception {
-        when(baptismService.findById(999L)).thenReturn(java.util.Optional.empty());
+        when(sacramentAuthorizationService.requireReadAccessForBaptism(999L)).thenReturn(false);
 
         mvc.perform(get("/api/baptisms/999"))
                 .andExpect(status().isNotFound());
+
+        verify(baptismService, never()).findById(anyLong());
     }
 }

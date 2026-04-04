@@ -12,8 +12,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Diocese-level dashboard endpoints. Returns aggregated counts, parish activity,
  * cross-parish recent sacraments, and monthly chart data.
- * Access restricted to ADMIN and SUPER_ADMIN.
- * Diocese dashboard is cached for 2 minutes to reduce database load.
+ * Access: {@code SUPER_ADMIN} sees the full diocese; parish-scoped {@code ADMIN} sees the same metrics only for
+ * parishes they are assigned to in this diocese (Option B). Cache keys include user scope.
  */
 @RestController
 @RequestMapping("/api/dioceses")

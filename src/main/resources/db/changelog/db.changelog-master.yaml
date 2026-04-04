@@ -223,3 +223,7 @@ databaseChangeLog:
       file: db/changelog/changes/025-user-invitation-email-delivery-tracking.yaml
   - include:
       file: db/changelog/changes/026-diocese-country-and-ordinary-fields.yaml
+  - include:
+      file: db/changelog/changes/027-rls-app-is-admin-super-admin-only-doc.yaml
+  - include:
+      file: db/changelog/changes/028-admin-user-parish-access-backfill.yaml

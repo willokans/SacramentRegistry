@@ -47,7 +47,9 @@ public class CertificateController {
 
     @GetMapping("/baptisms/{id}/certificate-data")
     public BaptismCertificateDataResponse getBaptismCertificateData(@PathVariable Long id) {
-        authorizationService.findBaptismParishId(id).ifPresent(authorizationService::requireParishAccess);
+        if (!authorizationService.requireReadAccessForBaptism(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Baptism not found");
+        }
         BaptismResponse baptism = baptismService.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Baptism not found"));
 
@@ -80,9 +82,11 @@ public class CertificateController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Certificate file is too large. Maximum size is 2 MB.");
         }
+        if (!authorizationService.requireWriteAccessForBaptism(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Baptism not found");
+        }
         Long parishId = authorizationService.findBaptismParishId(id).orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Baptism not found or has no parish"));
-        authorizationService.requireWriteAccessForParish(parishId);
+                () -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Baptism has no parish"));
 
         String safeName = System.currentTimeMillis() + "-" + (file.getOriginalFilename() != null
                 ? file.getOriginalFilename().replaceAll("[^a-zA-Z0-9._-]", "_") : "file");
@@ -112,9 +116,11 @@ public class CertificateController {
             @PathVariable Long id,
             @RequestParam("file") MultipartFile file
     ) {
+        if (!authorizationService.requireWriteAccessForBaptism(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Baptism not found");
+        }
         Long parishId = authorizationService.findBaptismParishId(id).orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Baptism not found or has no parish"));
-        authorizationService.requireWriteAccessForParish(parishId);
+                () -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Baptism has no parish"));
         BaptismDocumentVersionResponse created = birthCertificateService.upload(id, file);
         auditService.logUpdate(SacramentType.BAPTISM, id, parishId, "birth_certificate_upload");
         return ResponseEntity.ok(created);
@@ -122,18 +128,22 @@ public class CertificateController {
 
     @GetMapping("/baptisms/{id}/birth-certificate")
     public ResponseEntity<byte[]> getCurrentBirthCertificate(@PathVariable Long id) {
+        if (!authorizationService.requireReadAccessForBaptism(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Baptism not found");
+        }
         Long parishId = authorizationService.findBaptismParishId(id).orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Baptism not found or has no parish"));
-        authorizationService.requireParishAccess(parishId);
+                () -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Baptism has no parish"));
         auditService.logCertificateDownload(SacramentType.BAPTISM, id, parishId, "birth_certificate_current");
         return fileResponse(birthCertificateService.downloadCurrent(id));
     }
 
     @GetMapping("/baptisms/{id}/birth-certificate/versions")
     public List<BaptismDocumentVersionResponse> listBirthCertificateVersions(@PathVariable Long id) {
+        if (!authorizationService.requireReadAccessForBaptism(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Baptism not found");
+        }
         Long parishId = authorizationService.findBaptismParishId(id).orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Baptism not found or has no parish"));
-        authorizationService.requireParishAccess(parishId);
+                () -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Baptism has no parish"));
         auditService.logRead(SacramentType.BAPTISM, id, parishId);
         return birthCertificateService.listVersions(id);
     }
@@ -143,16 +153,20 @@ public class CertificateController {
             @PathVariable Long id,
             @PathVariable Long versionId
     ) {
+        if (!authorizationService.requireReadAccessForBaptism(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Baptism not found");
+        }
         Long parishId = authorizationService.findBaptismParishId(id).orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Baptism not found or has no parish"));
-        authorizationService.requireParishAccess(parishId);
+                () -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Baptism has no parish"));
         auditService.logCertificateDownload(SacramentType.BAPTISM, id, parishId, "birth_certificate_version");
         return fileResponse(birthCertificateService.downloadVersion(id, versionId));
     }
 
     @GetMapping("/baptisms/{id}/external-certificate")
     public ResponseEntity<byte[]> getBaptismExternalCertificate(@PathVariable Long id) {
-        authorizationService.findBaptismParishId(id).ifPresent(authorizationService::requireParishAccess);
+        if (!authorizationService.requireReadAccessForBaptism(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Baptism not found");
+        }
         Long parishId = authorizationService.findBaptismParishId(id).orElse(null);
         auditService.logCertificateDownload(SacramentType.BAPTISM, id, parishId, "baptism_external");
         Baptism baptism = baptismRepository.findById(id)
@@ -173,7 +187,9 @@ public class CertificateController {
 
     @PostMapping("/baptisms/{id}/email-certificate")
     public ResponseEntity<Map<String, String>> emailBaptismCertificate(@PathVariable Long id, @RequestBody Map<String, String> body) {
-        authorizationService.findBaptismParishId(id).ifPresent(authorizationService::requireParishAccess);
+        if (!authorizationService.requireReadAccessForBaptism(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Baptism not found");
+        }
         if (body == null || body.getOrDefault("to", "").isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Recipient email is required");
         }
@@ -182,7 +198,9 @@ public class CertificateController {
 
     @GetMapping("/communions/{id}/communion-certificate")
     public ResponseEntity<byte[]> getCommunionCertificate(@PathVariable Long id) {
-        authorizationService.findCommunionParishId(id).ifPresent(authorizationService::requireParishAccess);
+        if (!authorizationService.requireReadAccessForCommunion(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "First Holy Communion not found");
+        }
         Long parishId = authorizationService.findCommunionParishId(id).orElse(null);
         auditService.logCertificateDownload(SacramentType.COMMUNION, id, parishId, "communion");
         FirstHolyCommunion communion = communionRepository.findById(id)
@@ -199,7 +217,9 @@ public class CertificateController {
             @RequestParam String role,
             @RequestParam String type
     ) {
-        authorizationService.findMarriageParishId(id).ifPresent(authorizationService::requireParishAccess);
+        if (!authorizationService.requireReadAccessForMarriage(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Marriage not found");
+        }
         Long parishId = authorizationService.findMarriageParishId(id).orElse(null);
         auditService.logCertificateDownload(SacramentType.MARRIAGE, id, parishId, "party_" + type);
         Integer legacyMarriageId = Math.toIntExact(id);

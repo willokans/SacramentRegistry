@@ -9,6 +9,7 @@ import com.wyloks.churchRegistry.entity.Diocese;
 import com.wyloks.churchRegistry.entity.Parish;
 import com.wyloks.churchRegistry.repository.*;
 import com.wyloks.churchRegistry.repository.projection.ParishActivityRow;
+import com.wyloks.churchRegistry.security.CurrentUserAccessService;
 import com.wyloks.churchRegistry.service.impl.DioceseDashboardServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -65,6 +66,9 @@ class DioceseDashboardServiceImplTest {
     @Mock
     MarriageService marriageService;
 
+    @Mock
+    CurrentUserAccessService currentUserAccessService;
+
     DioceseDashboardServiceImpl dioceseDashboardService;
 
     Diocese diocese;
@@ -74,6 +78,7 @@ class DioceseDashboardServiceImplTest {
     @BeforeEach
     void setUp() {
         dioceseDashboardService = new DioceseDashboardServiceImpl(
+                currentUserAccessService,
                 parishRepository,
                 dashboardRepository,
                 baptismRepository,
@@ -110,13 +115,17 @@ class DioceseDashboardServiceImplTest {
         parish2.setId(20L);
         diocese.setId(dioceseId);
 
+        when(currentUserAccessService.currentUser())
+                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("sa", "SUPER_ADMIN", Set.of()));
+
         when(parishRepository.findByDioceseId(dioceseId))
                 .thenReturn(List.of(parish1, parish2));
-        when(baptismRepository.countByParish_Diocese_Id(dioceseId)).thenReturn(15L);
-        when(communionRepository.countByBaptismParish_Diocese_Id(dioceseId)).thenReturn(8L);
-        when(confirmationRepository.countByBaptismParish_Diocese_Id(dioceseId)).thenReturn(5L);
-        when(marriageRepository.countByBaptismParish_Diocese_Id(dioceseId)).thenReturn(3L);
-        when(holyOrderRepository.countByBaptismParish_Diocese_Id(dioceseId)).thenReturn(1L);
+        Set<Long> allParishIds = Set.of(10L, 20L);
+        when(baptismRepository.countByParishIdIn(allParishIds)).thenReturn(15L);
+        when(communionRepository.countByBaptismParishIdIn(allParishIds)).thenReturn(8L);
+        when(confirmationRepository.countByBaptismParishIdIn(allParishIds)).thenReturn(5L);
+        when(marriageRepository.countByBaptismParishIdIn(allParishIds)).thenReturn(3L);
+        when(holyOrderRepository.countByBaptismParishIdIn(allParishIds)).thenReturn(1L);
 
         ParishActivityRow row1 = createParishActivityRow(10L, "Parish 1", 10, 5, 3, 2);
         ParishActivityRow row2 = createParishActivityRow(20L, "Parish 2", 5, 3, 2, 1);
@@ -160,6 +169,8 @@ class DioceseDashboardServiceImplTest {
     @Test
     void getDioceseDashboard_returnsEmptyWhenNoParishes() {
         Long dioceseId = 1L;
+        when(currentUserAccessService.currentUser())
+                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("sa", "SUPER_ADMIN", Set.of()));
         when(parishRepository.findByDioceseId(dioceseId)).thenReturn(List.of());
 
         DioceseDashboardResponse result = dioceseDashboardService.getDioceseDashboard(dioceseId);
@@ -182,12 +193,14 @@ class DioceseDashboardServiceImplTest {
         parish1.setId(10L);
         diocese.setId(dioceseId);
 
+        when(currentUserAccessService.currentUser())
+                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("sa", "SUPER_ADMIN", Set.of()));
         when(parishRepository.findByDioceseId(dioceseId)).thenReturn(List.of(parish1));
-        when(baptismRepository.countByParish_Diocese_Id(dioceseId)).thenReturn(1L);
-        when(communionRepository.countByBaptismParish_Diocese_Id(dioceseId)).thenReturn(0L);
-        when(confirmationRepository.countByBaptismParish_Diocese_Id(dioceseId)).thenReturn(0L);
-        when(marriageRepository.countByBaptismParish_Diocese_Id(dioceseId)).thenReturn(0L);
-        when(holyOrderRepository.countByBaptismParish_Diocese_Id(dioceseId)).thenReturn(0L);
+        when(baptismRepository.countByParishIdIn(Set.of(10L))).thenReturn(1L);
+        when(communionRepository.countByBaptismParishIdIn(Set.of(10L))).thenReturn(0L);
+        when(confirmationRepository.countByBaptismParishIdIn(Set.of(10L))).thenReturn(0L);
+        when(marriageRepository.countByBaptismParishIdIn(Set.of(10L))).thenReturn(0L);
+        when(holyOrderRepository.countByBaptismParishIdIn(Set.of(10L))).thenReturn(0L);
 
         when(dashboardRepository.getParishActivity(dioceseId))
                 .thenReturn(List.of(createParishActivityRow(10L, "Parish 1", 1, 0, 0, 0)));
@@ -219,12 +232,14 @@ class DioceseDashboardServiceImplTest {
         parish1.setId(10L);
         diocese.setId(dioceseId);
 
+        when(currentUserAccessService.currentUser())
+                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("sa", "SUPER_ADMIN", Set.of()));
         when(parishRepository.findByDioceseId(dioceseId)).thenReturn(List.of(parish1));
-        when(baptismRepository.countByParish_Diocese_Id(dioceseId)).thenReturn(2L);
-        when(communionRepository.countByBaptismParish_Diocese_Id(dioceseId)).thenReturn(0L);
-        when(confirmationRepository.countByBaptismParish_Diocese_Id(dioceseId)).thenReturn(0L);
-        when(marriageRepository.countByBaptismParish_Diocese_Id(dioceseId)).thenReturn(0L);
-        when(holyOrderRepository.countByBaptismParish_Diocese_Id(dioceseId)).thenReturn(0L);
+        when(baptismRepository.countByParishIdIn(Set.of(10L))).thenReturn(2L);
+        when(communionRepository.countByBaptismParishIdIn(Set.of(10L))).thenReturn(0L);
+        when(confirmationRepository.countByBaptismParishIdIn(Set.of(10L))).thenReturn(0L);
+        when(marriageRepository.countByBaptismParishIdIn(Set.of(10L))).thenReturn(0L);
+        when(holyOrderRepository.countByBaptismParishIdIn(Set.of(10L))).thenReturn(0L);
 
         when(dashboardRepository.getParishActivity(dioceseId))
                 .thenReturn(List.of(createParishActivityRow(10L, "Parish 1", 2, 0, 0, 0)));
@@ -264,12 +279,14 @@ class DioceseDashboardServiceImplTest {
         parish1.setId(10L);
         diocese.setId(dioceseId);
 
+        when(currentUserAccessService.currentUser())
+                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("sa", "SUPER_ADMIN", Set.of()));
         when(parishRepository.findByDioceseId(dioceseId)).thenReturn(List.of(parish1));
-        when(baptismRepository.countByParish_Diocese_Id(dioceseId)).thenReturn(1L);
-        when(communionRepository.countByBaptismParish_Diocese_Id(dioceseId)).thenReturn(1L);
-        when(confirmationRepository.countByBaptismParish_Diocese_Id(dioceseId)).thenReturn(1L);
-        when(marriageRepository.countByBaptismParish_Diocese_Id(dioceseId)).thenReturn(1L);
-        when(holyOrderRepository.countByBaptismParish_Diocese_Id(dioceseId)).thenReturn(0L);
+        when(baptismRepository.countByParishIdIn(Set.of(10L))).thenReturn(1L);
+        when(communionRepository.countByBaptismParishIdIn(Set.of(10L))).thenReturn(1L);
+        when(confirmationRepository.countByBaptismParishIdIn(Set.of(10L))).thenReturn(1L);
+        when(marriageRepository.countByBaptismParishIdIn(Set.of(10L))).thenReturn(1L);
+        when(holyOrderRepository.countByBaptismParishIdIn(Set.of(10L))).thenReturn(0L);
 
         when(dashboardRepository.getParishActivity(dioceseId))
                 .thenReturn(List.of(createParishActivityRow(10L, "Parish 1", 1, 1, 1, 1)));
@@ -294,6 +311,50 @@ class DioceseDashboardServiceImplTest {
         assertThat(result.getRecentSacraments().getCommunions()).hasSize(1);
         assertThat(result.getRecentSacraments().getConfirmations()).hasSize(1);
         assertThat(result.getRecentSacraments().getMarriages()).hasSize(1);
+    }
+
+    @Test
+    void getDioceseDashboard_parishScopedAdmin_aggregatesOnlyAssignedParishesInDiocese() {
+        Long dioceseId = 1L;
+        parish1.setId(10L);
+        parish2.setId(20L);
+        diocese.setId(dioceseId);
+
+        when(currentUserAccessService.currentUser())
+                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("admin", "ADMIN", Set.of(10L)));
+
+        when(parishRepository.findByIdInAndDioceseId(Set.of(10L), dioceseId))
+                .thenReturn(List.of(parish1));
+
+        Set<Long> scoped = Set.of(10L);
+        when(baptismRepository.countByParishIdIn(scoped)).thenReturn(3L);
+        when(communionRepository.countByBaptismParishIdIn(scoped)).thenReturn(1L);
+        when(confirmationRepository.countByBaptismParishIdIn(scoped)).thenReturn(0L);
+        when(marriageRepository.countByBaptismParishIdIn(scoped)).thenReturn(0L);
+        when(holyOrderRepository.countByBaptismParishIdIn(scoped)).thenReturn(0L);
+
+        ParishActivityRow row1 = createParishActivityRow(10L, "Parish 1", 3, 1, 0, 0);
+        ParishActivityRow row2 = createParishActivityRow(20L, "Parish 2", 99, 99, 99, 99);
+        when(dashboardRepository.getParishActivity(dioceseId)).thenReturn(List.of(row1, row2));
+
+        when(baptismService.findByParishIdIn(eq(scoped), any(PageRequest.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+        when(communionService.findByParishIdIn(eq(scoped), any(PageRequest.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+        when(confirmationService.findByParishIdIn(eq(scoped), any(PageRequest.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+        when(marriageService.findByParishIdIn(eq(scoped), any(PageRequest.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        DioceseDashboardResponse result = dioceseDashboardService.getDioceseDashboard(dioceseId);
+
+        assertThat(result.getCounts())
+                .containsEntry("parishes", 1L)
+                .containsEntry("baptisms", 3L)
+                .containsEntry("communions", 1L);
+        assertThat(result.getParishActivity()).hasSize(1);
+        assertThat(result.getParishActivity().get(0).getParishId()).isEqualTo(10L);
+        assertThat(result.getParishActivity().get(0).getBaptisms()).isEqualTo(3L);
     }
 
     private static ParishActivityRow createParishActivityRow(Long parishId, String parishName,

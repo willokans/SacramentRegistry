@@ -15,6 +15,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -53,7 +54,9 @@ public class BaptismController {
 
     @GetMapping("/api/baptisms/{id}")
     public ResponseEntity<BaptismResponse> getById(@PathVariable Long id) {
-        authorizationService.findBaptismParishId(id).ifPresent(authorizationService::requireParishAccess);
+        if (!authorizationService.requireReadAccessForBaptism(id)) {
+            return ResponseEntity.notFound().build();
+        }
         return baptismService.findById(id)
                 .map(r -> {
                     auditService.logRead(SacramentType.BAPTISM, id, r.getParishId());
@@ -75,7 +78,9 @@ public class BaptismController {
 
     @PatchMapping("/api/baptisms/{id}")
     public ResponseEntity<BaptismResponse> updateNote(@PathVariable Long id, @RequestBody NoteUpdateRequest request) {
-        authorizationService.findBaptismParishId(id).ifPresent(authorizationService::requireWriteAccessForParish);
+        if (!authorizationService.requireWriteAccessForBaptism(id)) {
+            return ResponseEntity.notFound().build();
+        }
         BaptismResponse updated = baptismService.updateNote(id, request != null ? request.getNote() : null);
         auditService.logUpdate(SacramentType.BAPTISM, id, updated.getParishId(), "note");
         return ResponseEntity.ok(updated);
@@ -83,7 +88,9 @@ public class BaptismController {
 
     @GetMapping("/api/baptisms/{id}/notes")
     public List<SacramentNoteResponse> getNoteHistory(@PathVariable Long id) {
-        authorizationService.findBaptismParishId(id).ifPresent(authorizationService::requireParishAccess);
+        if (!authorizationService.requireReadAccessForBaptism(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Baptism not found");
+        }
         List<SacramentNoteResponse> result = baptismService.getNoteHistory(id);
         Long parishId = authorizationService.findBaptismParishId(id).orElse(null);
         auditService.logRead(SacramentType.BAPTISM, id, parishId);

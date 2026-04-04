@@ -8,6 +8,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -92,5 +93,10 @@ public class AppUserDetails implements UserDetails {
 
     public Set<Long> getParishAccessIds() {
         return Collections.unmodifiableSet(parishAccessIds);
+    }
+
+    /** Global bypass for RLS and parish checks; not granted to parish-scoped {@code ADMIN}. */
+    public boolean isSuperAdmin() {
+        return role != null && "SUPER_ADMIN".equals(role.trim().toUpperCase(Locale.ROOT));
     }
 }

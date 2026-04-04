@@ -96,7 +96,7 @@ class FirstHolyCommunionControllerTest {
                 .parish("St Mary")
                 .build();
 
-        when(sacramentAuthorizationService.findBaptismParishIdForCommunionRequest(1L)).thenReturn(Optional.of(1L));
+        when(sacramentAuthorizationService.requireBaptismForCommunionCreate(1L)).thenReturn(1L);
         when(communionService.create(any(FirstHolyCommunionRequest.class))).thenReturn(response);
 
         mvc.perform(post("/api/communions")

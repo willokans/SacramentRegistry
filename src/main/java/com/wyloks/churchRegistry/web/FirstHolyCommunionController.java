@@ -55,7 +55,9 @@ public class FirstHolyCommunionController {
 
     @GetMapping("/communions/{id}")
     public ResponseEntity<FirstHolyCommunionResponse> getById(@PathVariable Long id) {
-        authorizationService.findCommunionParishId(id).ifPresent(authorizationService::requireParishAccess);
+        if (!authorizationService.requireReadAccessForCommunion(id)) {
+            return ResponseEntity.notFound().build();
+        }
         return communionService.findById(id)
                 .map(r -> {
                     Long parishId = authorizationService.findCommunionParishId(id).orElse(null);
@@ -67,8 +69,9 @@ public class FirstHolyCommunionController {
 
     @GetMapping("/baptisms/{baptismId}/communions")
     public ResponseEntity<FirstHolyCommunionResponse> getByBaptismId(@PathVariable Long baptismId) {
-        authorizationService.findBaptismParishIdForCommunionRequest(baptismId)
-                .ifPresent(authorizationService::requireParishAccess);
+        if (!authorizationService.requireReadAccessForCommunionByBaptismId(baptismId)) {
+            return ResponseEntity.notFound().build();
+        }
         return communionService.findByBaptismId(baptismId)
                 .map(r -> {
                     Long parishId = authorizationService.findBaptismParishIdForCommunionRequest(baptismId).orElse(null);
@@ -80,10 +83,7 @@ public class FirstHolyCommunionController {
 
     @PostMapping(value = "/communions", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<FirstHolyCommunionResponse> create(@Valid @RequestBody FirstHolyCommunionRequest request) {
-        Long parishId = authorizationService.findBaptismParishIdForCommunionRequest(request.getBaptismId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Baptism not found or has no parish"));
-        authorizationService.requireWriteAccessForParish(parishId);
+        long parishId = authorizationService.requireBaptismForCommunionCreate(request.getBaptismId());
         FirstHolyCommunionResponse created = communionService.create(request);
         auditService.logCreate(SacramentType.COMMUNION, created.getId(), parishId);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
@@ -141,9 +141,7 @@ public class FirstHolyCommunionController {
         if (communionCertificate.getSize() > MAX_CERTIFICATE_SIZE) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Certificate file is too large. Maximum size is 2 MB.");
         }
-        Long parishId = authorizationService.findBaptismParishIdForCommunionRequest(baptismId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Baptism not found or has no parish"));
-        authorizationService.requireWriteAccessForParish(parishId);
+        long parishId = authorizationService.requireBaptismForCommunionCreate(baptismId);
 
         String safeName = System.currentTimeMillis() + "-" + (communionCertificate.getOriginalFilename() != null
                 ? communionCertificate.getOriginalFilename().replaceAll("[^a-zA-Z0-9._-]", "_") : "file");
@@ -240,7 +238,9 @@ public class FirstHolyCommunionController {
 
     @PatchMapping("/communions/{id}")
     public ResponseEntity<FirstHolyCommunionResponse> updateNote(@PathVariable Long id, @RequestBody NoteUpdateRequest request) {
-        authorizationService.findCommunionParishId(id).ifPresent(authorizationService::requireWriteAccessForParish);
+        if (!authorizationService.requireWriteAccessForCommunion(id)) {
+            return ResponseEntity.notFound().build();
+        }
         FirstHolyCommunionResponse updated = communionService.updateNote(id, request != null ? request.getNote() : null);
         Long parishId = authorizationService.findCommunionParishId(id).orElse(null);
         auditService.logUpdate(SacramentType.COMMUNION, id, parishId, "note");
@@ -249,7 +249,9 @@ public class FirstHolyCommunionController {
 
     @GetMapping("/communions/{id}/notes")
     public List<SacramentNoteResponse> getNoteHistory(@PathVariable Long id) {
-        authorizationService.findCommunionParishId(id).ifPresent(authorizationService::requireParishAccess);
+        if (!authorizationService.requireReadAccessForCommunion(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "First Holy Communion not found");
+        }
         List<SacramentNoteResponse> result = communionService.getNoteHistory(id);
         Long parishId = authorizationService.findCommunionParishId(id).orElse(null);
         auditService.logRead(SacramentType.COMMUNION, id, parishId);

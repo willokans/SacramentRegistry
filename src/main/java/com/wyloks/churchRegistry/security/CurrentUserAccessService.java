@@ -31,6 +31,11 @@ public class CurrentUserAccessService {
         return new CurrentUserAccess(userDetails.getUsername(), role, userDetails.getParishAccessIds());
     }
 
+    /** True when the current principal is {@code SUPER_ADMIN} (global bypass). */
+    public boolean isSuperAdmin() {
+        return currentUser().isSuperAdmin();
+    }
+
     /**
      * Returns the username of the currently authenticated user.
      * @throws ResponseStatusException 403 if not authenticated
@@ -59,7 +64,10 @@ public class CurrentUserAccessService {
     }
 
     public record CurrentUserAccess(String username, String role, Set<Long> parishIds) {
-        /** True for ADMIN or SUPER_ADMIN. Used for diocese/parish visibility and sacrament access. */
+        /**
+         * True for {@code ADMIN} or {@code SUPER_ADMIN}.
+         * Prefer {@link #isSuperAdmin()} when the decision is global bypass vs parish-scoped access.
+         */
         public boolean isAdmin() {
             return "ADMIN".equals(role) || "SUPER_ADMIN".equals(role);
         }

@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -38,7 +39,9 @@ public class HolyOrderController {
 
     @GetMapping("/holy-orders/{id}")
     public ResponseEntity<HolyOrderResponse> getById(@PathVariable Long id) {
-        authorizationService.findHolyOrderParishId(id).ifPresent(authorizationService::requireParishAccess);
+        if (!authorizationService.requireReadAccessForHolyOrder(id)) {
+            return ResponseEntity.notFound().build();
+        }
         return holyOrderService.findById(id)
                 .map(r -> {
                     Long parishId = authorizationService.findHolyOrderParishId(id).orElse(r.getParishId());
@@ -50,7 +53,9 @@ public class HolyOrderController {
 
     @GetMapping("/confirmations/{confirmationId}/holy-order")
     public ResponseEntity<HolyOrderResponse> getByConfirmationId(@PathVariable Long confirmationId) {
-        authorizationService.findConfirmationParishId(confirmationId).ifPresent(authorizationService::requireParishAccess);
+        if (!authorizationService.requireReadAccessForConfirmation(confirmationId)) {
+            return ResponseEntity.notFound().build();
+        }
         return holyOrderService.findByConfirmationId(confirmationId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -58,14 +63,12 @@ public class HolyOrderController {
 
     @PostMapping("/holy-orders")
     public ResponseEntity<HolyOrderResponse> create(@Valid @RequestBody HolyOrderRequest request) {
-        Long parishId = authorizationService.findConfirmationParishId(request.getConfirmationId())
-                .or(() -> java.util.Optional.ofNullable(request.getParishId()))
-                .orElse(null);
-        if (parishId != null) {
-            authorizationService.requireWriteAccessForParish(parishId);
+        long confirmationParishId = authorizationService.requireWriteAccessForExistingConfirmation(request.getConfirmationId());
+        if (request.getParishId() != null && !request.getParishId().equals(confirmationParishId)) {
+            authorizationService.requireWriteAccessForParish(request.getParishId());
         }
         HolyOrderResponse created = holyOrderService.create(request);
-        Long auditParishId = created.getParishId() != null ? created.getParishId() : parishId;
+        Long auditParishId = created.getParishId() != null ? created.getParishId() : confirmationParishId;
         auditService.logCreate(SacramentType.HOLY_ORDER, created.getId(), auditParishId);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }

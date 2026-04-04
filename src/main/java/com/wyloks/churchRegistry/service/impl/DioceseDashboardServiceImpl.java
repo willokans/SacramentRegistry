@@ -17,6 +17,7 @@ import com.wyloks.churchRegistry.repository.projection.ParishActivityRow;
 import com.wyloks.churchRegistry.service.BaptismService;
 import com.wyloks.churchRegistry.service.ConfirmationService;
 import com.wyloks.churchRegistry.service.DioceseDashboardService;
+import com.wyloks.churchRegistry.security.CurrentUserAccessService;
 import com.wyloks.churchRegistry.service.FirstHolyCommunionService;
 import com.wyloks.churchRegistry.service.MarriageService;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +40,7 @@ public class DioceseDashboardServiceImpl implements DioceseDashboardService {
     private static final int DASHBOARD_PAGE_SIZE = 50;
     private static final int MONTHLY_PAGE_SIZE = 200;
 
+    private final CurrentUserAccessService currentUserAccessService;
     private final ParishRepository parishRepository;
     private final DashboardRepository dashboardRepository;
     private final BaptismRepository baptismRepository;
@@ -52,15 +54,18 @@ public class DioceseDashboardServiceImpl implements DioceseDashboardService {
     private final MarriageService marriageService;
 
     @Override
-    @Cacheable(cacheNames = CacheConfig.CACHE_DIOCESE_DASHBOARD, key = "#dioceseId")
+    @Cacheable(cacheNames = CacheConfig.CACHE_DIOCESE_DASHBOARD, keyGenerator = "dioceseDashboardCacheKeyGenerator")
     public DioceseDashboardResponse getDioceseDashboard(Long dioceseId) {
-        List<com.wyloks.churchRegistry.entity.Parish> parishes = parishRepository.findByDioceseId(dioceseId);
-        Set<Long> parishIds = parishes.stream()
+        CurrentUserAccessService.CurrentUserAccess user = currentUserAccessService.currentUser();
+        List<com.wyloks.churchRegistry.entity.Parish> parishesInScope = user.isSuperAdmin()
+                ? parishRepository.findByDioceseId(dioceseId)
+                : parishRepository.findByIdInAndDioceseId(user.parishIds(), dioceseId);
+        Set<Long> parishIds = parishesInScope.stream()
                 .map(com.wyloks.churchRegistry.entity.Parish::getId)
                 .collect(Collectors.toSet());
 
-        Map<String, Long> counts = buildCounts(dioceseId, parishIds, parishes.size());
-        List<DioceseDashboardResponse.ParishActivityItem> parishActivity = buildParishActivity(dioceseId);
+        Map<String, Long> counts = buildCounts(parishIds);
+        List<DioceseDashboardResponse.ParishActivityItem> parishActivity = buildParishActivity(dioceseId, parishIds);
         DioceseDashboardResponse.RecentSacraments recentSacraments = buildRecentSacraments(parishIds);
         DioceseDashboardResponse.MonthlyData monthly = buildMonthlyData(parishIds);
 
@@ -72,15 +77,25 @@ public class DioceseDashboardServiceImpl implements DioceseDashboardService {
                 .build();
     }
 
-    private Map<String, Long> buildCounts(Long dioceseId, Set<Long> parishIds, int parishCount) {
-        long baptisms = baptismRepository.countByParish_Diocese_Id(dioceseId);
-        long communions = communionRepository.countByBaptismParish_Diocese_Id(dioceseId);
-        long confirmations = confirmationRepository.countByBaptismParish_Diocese_Id(dioceseId);
-        long marriages = marriageRepository.countByBaptismParish_Diocese_Id(dioceseId);
-        long holyOrders = holyOrderRepository.countByBaptismParish_Diocese_Id(dioceseId);
+    private Map<String, Long> buildCounts(Set<Long> parishIds) {
+        if (parishIds.isEmpty()) {
+            return Map.of(
+                    "parishes", 0L,
+                    "baptisms", 0L,
+                    "communions", 0L,
+                    "confirmations", 0L,
+                    "marriages", 0L,
+                    "holyOrders", 0L
+            );
+        }
+        long baptisms = baptismRepository.countByParishIdIn(parishIds);
+        long communions = communionRepository.countByBaptismParishIdIn(parishIds);
+        long confirmations = confirmationRepository.countByBaptismParishIdIn(parishIds);
+        long marriages = marriageRepository.countByBaptismParishIdIn(parishIds);
+        long holyOrders = holyOrderRepository.countByBaptismParishIdIn(parishIds);
 
         return Map.of(
-                "parishes", (long) parishCount,
+                "parishes", (long) parishIds.size(),
                 "baptisms", baptisms,
                 "communions", communions,
                 "confirmations", confirmations,
@@ -89,9 +104,13 @@ public class DioceseDashboardServiceImpl implements DioceseDashboardService {
         );
     }
 
-    private List<DioceseDashboardResponse.ParishActivityItem> buildParishActivity(Long dioceseId) {
+    private List<DioceseDashboardResponse.ParishActivityItem> buildParishActivity(Long dioceseId, Set<Long> scopeParishIds) {
+        if (scopeParishIds.isEmpty()) {
+            return List.of();
+        }
         List<ParishActivityRow> rows = dashboardRepository.getParishActivity(dioceseId);
         return rows.stream()
+                .filter(row -> row.getParishId() != null && scopeParishIds.contains(row.getParishId()))
                 .map(row -> DioceseDashboardResponse.ParishActivityItem.builder()
                         .parishId(row.getParishId())
                         .parishName(row.getParishName())

@@ -16,6 +16,7 @@ import {
   type DioceseResponse,
   type ParishResponse,
 } from '@/lib/api';
+import { appRoleLabel } from '@/lib/appRoles';
 
 function isAdminOrSuperAdmin(role: string | null | undefined): boolean {
   return role === 'ADMIN' || role === 'SUPER_ADMIN';
@@ -227,7 +228,7 @@ export default function UsersPage() {
                       {u.displayName || u.username}
                     </span>
                     <span className="block truncate text-xs text-gray-500">
-                      {u.username} · {u.role ?? '—'} · {u.parishAccessIds.length} parish
+                      {u.username} · {appRoleLabel(u.role)} · {u.parishAccessIds.length} parish
                       {u.parishAccessIds.length !== 1 ? 'es' : ''}
                     </span>
                   </button>
@@ -402,7 +403,7 @@ function UserParishAccessForm({
         {user.displayName || user.username}
       </h2>
       <p className="mt-0.5 text-sm text-gray-500">
-        {user.username} · {user.role ?? '—'}
+        {user.username} · {appRoleLabel(user.role)}
       </p>
 
       <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3">

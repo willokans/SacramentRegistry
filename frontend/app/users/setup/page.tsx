@@ -14,17 +14,9 @@ import {
   type DioceseResponse,
   type ParishResponse,
 } from '@/lib/api';
+import { USER_SETUP_ROLE_OPTIONS } from '@/lib/appRoles';
 
 const TITLE_OPTIONS = ['Mr', 'Mrs', 'Miss', 'Ms', 'Sir', 'Fr.', 'Rev.', 'Dr.', 'Prof.'];
-
-const ROLE_OPTIONS = [
-  { value: 'SUPER_ADMIN', label: 'Super Admin' },
-  { value: 'ADMIN', label: 'Admin' },
-  { value: 'PRIEST', label: 'Priest' },
-  { value: 'PARISH_PRIEST', label: 'Parish Priest' },
-  { value: 'PARISH_SECRETARY', label: 'Parish Secretary' },
-  { value: 'PARISH_VIEWER', label: 'Parish Viewer' },
-];
 
 export default function UserSetupPage() {
   const router = useRouter();
@@ -265,6 +257,11 @@ function CreateUserForm({
     defaultParishId != null && defaultParishId > 0 && !parishIds.has(defaultParishId);
   const passwordsMatch = defaultPassword === confirmPassword;
   const passwordValid = defaultPassword.length >= 8;
+  const selectedRoleOption = useMemo(
+    () => USER_SETUP_ROLE_OPTIONS.find((r) => r.value === role),
+    [role],
+  );
+  const roleDescriptionId = selectedRoleOption?.description ? 'role-field-description' : undefined;
 
   const addParish = (id: number) => {
     setParishIds((prev) => {
@@ -464,14 +461,20 @@ function CreateUserForm({
           id="role"
           value={role}
           onChange={(e) => setRole(e.target.value)}
+          aria-describedby={roleDescriptionId}
           className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-sancta-maroon focus:outline-none focus:ring-1 focus:ring-sancta-maroon"
         >
-          {ROLE_OPTIONS.map((r) => (
+          {USER_SETUP_ROLE_OPTIONS.map((r) => (
             <option key={r.value} value={r.value}>
               {r.label}
             </option>
           ))}
         </select>
+        {selectedRoleOption?.description && (
+          <p id="role-field-description" className="mt-2 text-xs text-gray-600">
+            {selectedRoleOption.description}
+          </p>
+        )}
       </div>
 
       <div className="mt-6">

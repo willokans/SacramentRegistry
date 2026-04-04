@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
@@ -46,6 +47,35 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
                 LOWER(COALESCE(u.displayName, '')) LIKE LOWER(CONCAT('%', :q, '%')))
             """)
     Page<AppUser> searchByUserMetadata(@Param("q") String query, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"parish", "parishAccesses"})
+    @Query("""
+            SELECT DISTINCT u FROM AppUser u
+            LEFT JOIN u.parishAccesses pa
+            WHERE (pa IS NOT NULL AND pa.id IN :actorParishIds)
+               OR (u.parish IS NOT NULL AND u.parish.id IN :actorParishIds)
+            ORDER BY u.username ASC
+            """)
+    List<AppUser> findWithParishOverlapOrderByUsernameAsc(@Param("actorParishIds") Set<Long> actorParishIds);
+
+    @EntityGraph(attributePaths = {"parish", "parishAccesses"})
+    @Query("""
+            SELECT DISTINCT u FROM AppUser u
+            LEFT JOIN u.parishAccesses pa
+            WHERE ((pa IS NOT NULL AND pa.id IN :actorParishIds)
+                OR (u.parish IS NOT NULL AND u.parish.id IN :actorParishIds))
+            AND (:q IS NULL OR TRIM(:q) = '' OR
+                LOWER(COALESCE(u.username, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR
+                LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR
+                LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR
+                LOWER(COALESCE(u.lastName, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR
+                LOWER(COALESCE(u.displayName, '')) LIKE LOWER(CONCAT('%', :q, '%')))
+            """)
+    Page<AppUser> searchByUserMetadataWithParishOverlap(
+            @Param("actorParishIds") Set<Long> actorParishIds,
+            @Param("q") String query,
+            Pageable pageable
+    );
 
     boolean existsByUsername(String username);
 

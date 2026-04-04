@@ -30,6 +30,7 @@ import java.util.Optional;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -136,7 +137,8 @@ class MarriageControllerWithPartiesTest {
                 .build();
 
         when(marriageService.createWithParties(any(CreateMarriageWithPartiesRequest.class))).thenReturn(response);
-        when(sacramentAuthorizationService.findMarriageParishIdByConfirmationId(eq(101L))).thenReturn(Optional.of(1L));
+        when(sacramentAuthorizationService.requireWriteAccessForExistingConfirmation(101L)).thenReturn(1L);
+        doNothing().when(sacramentAuthorizationService).requireWriteAccessForParish(1L);
         when(parishService.findById(anyLong())).thenReturn(Optional.of(
                 ParishResponse.builder()
                         .id(1L)
@@ -227,7 +229,7 @@ class MarriageControllerWithPartiesTest {
                 .andExpect(jsonPath("$.id").value(77))
                 .andExpect(jsonPath("$.confirmationId").value(nullValue()));
 
-        verify(sacramentAuthorizationService, never()).findMarriageParishIdByConfirmationId(anyLong());
+        verify(sacramentAuthorizationService, never()).requireWriteAccessForExistingConfirmation(anyLong());
     }
 
     @Test

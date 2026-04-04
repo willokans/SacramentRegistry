@@ -23,6 +23,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+/**
+ * Parishes-by-diocese listing follows the same parish scope as directory and diocese dashboard (Option B).
+ */
 @Service
 @RequiredArgsConstructor
 public class ParishServiceImpl implements ParishService {
@@ -36,7 +39,7 @@ public class ParishServiceImpl implements ParishService {
     @Cacheable(cacheNames = CacheConfig.CACHE_PARISHES_BY_DIOCESE, keyGenerator = "dioceseParishCacheKeyGenerator")
     public List<ParishResponse> findByDioceseId(Long dioceseId) {
         CurrentUserAccessService.CurrentUserAccess currentUser = currentUserAccessService.currentUser();
-        List<Parish> parishes = currentUser.isAdmin()
+        List<Parish> parishes = currentUser.isSuperAdmin()
                 ? parishRepository.findByDioceseId(dioceseId)
                 : currentUser.parishIds().isEmpty()
                     ? List.of()
@@ -57,7 +60,7 @@ public class ParishServiceImpl implements ParishService {
     @Transactional
     @CacheEvict(cacheNames = {CacheConfig.CACHE_DIOCESES_WITH_PARISHES, CacheConfig.CACHE_PARISHES_BY_DIOCESE}, allEntries = true)
     public ParishResponse create(ParishRequest request) {
-        requireAdminRole();
+        requireSuperAdminRole();
         Diocese diocese = dioceseRepository.findById(request.getDioceseId())
                 .orElseThrow(() -> new IllegalArgumentException("Diocese not found: " + request.getDioceseId()));
         String parishName = NameUtils.capitalizeNameOrEmpty(request.getParishName());
@@ -116,10 +119,10 @@ public class ParishServiceImpl implements ParishService {
                 .build();
     }
 
-    private void requireAdminRole() {
+    private void requireSuperAdminRole() {
         CurrentUserAccessService.CurrentUserAccess currentUser = currentUserAccessService.currentUser();
-        if (!currentUser.isAdmin()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin role required");
+        if (!currentUser.isSuperAdmin()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Super administrator role required");
         }
     }
 }

@@ -459,8 +459,8 @@ class SacramentAuthorizationIntegrationTest {
     }
 
     @Test
-    void admin_canReadAcrossParishes() throws Exception {
-        String token = login("admin", "password");
+    void superAdmin_canReadAcrossParishes() throws Exception {
+        String token = login("superadmin", "password");
 
         mvc.perform(get("/api/parishes/" + parishB.getId() + "/baptisms")
                         .header("Authorization", bearer(token)))
@@ -468,6 +468,24 @@ class SacramentAuthorizationIntegrationTest {
         mvc.perform(get("/api/marriages/" + marriageB.getId())
                         .header("Authorization", bearer(token)))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void admin_cannotReadSacramentsOutsideAssignedParishes() throws Exception {
+        AppUser admin = appUserRepository.findByUsername("admin").orElseThrow();
+        admin.setParish(parishA);
+        admin.getParishAccesses().clear();
+        admin.getParishAccesses().add(parishA);
+        appUserRepository.save(admin);
+
+        String token = login("admin", "password");
+
+        mvc.perform(get("/api/parishes/" + parishB.getId() + "/baptisms")
+                        .header("Authorization", bearer(token)))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/marriages/" + marriageB.getId())
+                        .header("Authorization", bearer(token)))
+                .andExpect(status().isForbidden());
     }
 
     private Baptism baptismForParish(Parish parish, String namePrefix) {

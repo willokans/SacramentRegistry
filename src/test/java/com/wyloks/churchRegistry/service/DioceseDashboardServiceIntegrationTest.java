@@ -1,6 +1,7 @@
 package com.wyloks.churchRegistry.service;
 
 import com.wyloks.churchRegistry.dto.DioceseDashboardResponse;
+import com.wyloks.churchRegistry.entity.AppUser;
 import com.wyloks.churchRegistry.entity.Baptism;
 import com.wyloks.churchRegistry.entity.Diocese;
 import com.wyloks.churchRegistry.entity.FirstHolyCommunion;
@@ -9,10 +10,14 @@ import com.wyloks.churchRegistry.repository.BaptismRepository;
 import com.wyloks.churchRegistry.repository.DioceseRepository;
 import com.wyloks.churchRegistry.repository.FirstHolyCommunionRepository;
 import com.wyloks.churchRegistry.repository.ParishRepository;
+import com.wyloks.churchRegistry.security.AppUserDetails;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
@@ -47,6 +52,15 @@ class DioceseDashboardServiceIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        AppUser superUser = AppUser.builder()
+                .username("diocese-dashboard-it")
+                .passwordHash("unused")
+                .role("SUPER_ADMIN")
+                .build();
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(new AppUserDetails(superUser), null,
+                        new AppUserDetails(superUser).getAuthorities()));
+
         diocese = dioceseRepository.save(Diocese.builder()
                 .dioceseName("Integration Test Diocese")
                 .code("ITD")
@@ -64,6 +78,11 @@ class DioceseDashboardServiceIntegrationTest {
                 .diocese(diocese)
                 .description("P2")
                 .build());
+    }
+
+    @AfterEach
+    void clearSecurity() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test

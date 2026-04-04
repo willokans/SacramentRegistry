@@ -33,7 +33,7 @@ class DioceseParishCacheIntegrationTest {
 
     @Test
     void findDiocesesWithParishes_populatesCache_andSecondCallHitsCache() throws Exception {
-        String token = loginAndGetToken("admin", "password");
+        String token = loginAndGetToken("superadmin", "password");
 
         Cache diocesesCache = cacheManager.getCache(CacheConfig.CACHE_DIOCESES_WITH_PARISHES);
         assertThat(diocesesCache).isNotNull();
@@ -57,7 +57,7 @@ class DioceseParishCacheIntegrationTest {
 
     @Test
     void createDiocese_evictsDiocesesAndParishesCaches() throws Exception {
-        String token = loginAndGetToken("admin", "password");
+        String token = loginAndGetToken("superadmin", "password");
 
         // Populate cache
         mvc.perform(get("/api/dioceses/with-parishes")
@@ -85,7 +85,7 @@ class DioceseParishCacheIntegrationTest {
 
     @Test
     void findByDioceseId_populatesParishesCache() throws Exception {
-        String token = loginAndGetToken("admin", "password");
+        String token = loginAndGetToken("superadmin", "password");
 
         // Get a diocese id first
         String diocesesResponse = mvc.perform(get("/api/dioceses")
@@ -133,7 +133,7 @@ class DioceseParishCacheIntegrationTest {
 
     @Test
     void createParish_evictsDiocesesAndParishesCaches() throws Exception {
-        String token = loginAndGetToken("admin", "password");
+        String token = loginAndGetToken("superadmin", "password");
 
         // Ensure we have a diocese
         String diocesesResponse = mvc.perform(get("/api/dioceses")

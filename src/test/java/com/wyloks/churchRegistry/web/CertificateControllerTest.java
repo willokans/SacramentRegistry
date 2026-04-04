@@ -30,7 +30,6 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -73,8 +72,8 @@ class CertificateControllerTest {
 
     @Test
     void uploadExternalCertificate_returns200AndUpdatedBaptism() throws Exception {
+        when(authorizationService.requireWriteAccessForBaptism(1L)).thenReturn(true);
         when(authorizationService.findBaptismParishId(1L)).thenReturn(Optional.of(10L));
-        doNothing().when(authorizationService).requireWriteAccessForParish(10L);
         when(remoteFileService.upload(eq("baptism-certificates"), anyString(), any(), anyString()))
                 .thenReturn("1730000000-cert.pdf");
 
@@ -99,14 +98,15 @@ class CertificateControllerTest {
     }
 
     @Test
-    void uploadExternalCertificate_returns404_whenBaptismHasNoParish() throws Exception {
+    void uploadExternalCertificate_returns400_whenBaptismHasNoParish() throws Exception {
+        when(authorizationService.requireWriteAccessForBaptism(1L)).thenReturn(true);
         when(authorizationService.findBaptismParishId(1L)).thenReturn(Optional.empty());
 
         MockMultipartFile file = new MockMultipartFile(
                 "file", "cert.pdf", "application/pdf", "x".getBytes());
 
         mvc.perform(multipart("/api/baptisms/1/external-certificate").file(file))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isBadRequest());
 
         verify(remoteFileService, never()).upload(anyString(), anyString(), any(), anyString());
         verify(baptismService, never()).attachExternalCertificate(any(), anyString());
@@ -114,8 +114,8 @@ class CertificateControllerTest {
 
     @Test
     void uploadExternalCertificate_returns409_whenCertificateAlreadyStored() throws Exception {
+        when(authorizationService.requireWriteAccessForBaptism(1L)).thenReturn(true);
         when(authorizationService.findBaptismParishId(1L)).thenReturn(Optional.of(10L));
-        doNothing().when(authorizationService).requireWriteAccessForParish(10L);
         when(remoteFileService.upload(eq("baptism-certificates"), anyString(), any(), anyString()))
                 .thenReturn("1730000000-cert.pdf");
         when(baptismService.attachExternalCertificate(eq(1L), eq("baptism-certificates/1730000000-cert.pdf")))
@@ -141,8 +141,8 @@ class CertificateControllerTest {
 
     @Test
     void uploadBirthCertificate_returns200AndCreatedVersion() throws Exception {
+        when(authorizationService.requireWriteAccessForBaptism(1L)).thenReturn(true);
         when(authorizationService.findBaptismParishId(1L)).thenReturn(Optional.of(10L));
-        doNothing().when(authorizationService).requireWriteAccessForParish(10L);
         when(birthCertificateService.upload(eq(1L), any())).thenReturn(BaptismDocumentVersionResponse.builder()
                 .id(101L)
                 .baptismId(1L)
@@ -165,8 +165,8 @@ class CertificateControllerTest {
 
     @Test
     void listBirthCertificateVersions_returns200() throws Exception {
+        when(authorizationService.requireReadAccessForBaptism(1L)).thenReturn(true);
         when(authorizationService.findBaptismParishId(1L)).thenReturn(Optional.of(10L));
-        doNothing().when(authorizationService).requireParishAccess(10L);
         when(birthCertificateService.listVersions(1L)).thenReturn(List.of(
                 BaptismDocumentVersionResponse.builder().id(2L).current(true).build(),
                 BaptismDocumentVersionResponse.builder().id(1L).current(false).build()

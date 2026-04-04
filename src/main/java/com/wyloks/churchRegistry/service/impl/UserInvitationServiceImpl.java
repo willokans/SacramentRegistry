@@ -9,6 +9,7 @@ import com.wyloks.churchRegistry.entity.UserInvitationStatus;
 import com.wyloks.churchRegistry.repository.AppUserRepository;
 import com.wyloks.churchRegistry.repository.UserInvitationRepository;
 import com.wyloks.churchRegistry.security.CurrentUserAccessService;
+import com.wyloks.churchRegistry.security.ParishAccessPolicy;
 import com.wyloks.churchRegistry.service.InvitationEmailService;
 import com.wyloks.churchRegistry.service.UserInvitationService;
 import lombok.RequiredArgsConstructor;
@@ -55,13 +56,16 @@ public class UserInvitationServiceImpl implements UserInvitationService {
         CurrentUserAccessService.CurrentUserAccess currentUser = requireAdmin();
         AppUser createdByUser = findCurrentActor(currentUser);
         AppUser targetUser = findTargetUser(userId);
+        requireActorCanManageInvitedUser(currentUser, targetUser);
         return issueInvitationForUser(targetUser, createdByUser, "ISSUE", null);
     }
 
     @Override
     @Transactional(readOnly = true)
     public IssueUserInvitationResponse getLatestInvitationForUser(Long userId) {
-        requireAdmin();
+        CurrentUserAccessService.CurrentUserAccess actor = requireAdmin();
+        AppUser targetUser = findTargetUser(userId);
+        requireActorCanManageInvitedUser(actor, targetUser);
         UserInvitation invitation = userInvitationRepository.findFirstByAppUserIdOrderByCreatedAtDescIdDesc(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invitation not found for user: " + userId));
         return buildInvitationResponse(invitation, null);
@@ -97,6 +101,9 @@ public class UserInvitationServiceImpl implements UserInvitationService {
         if (appUser == null || appUser.getId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation user does not exist");
         }
+        AppUser targetScoped = appUserRepository.findWithParishAccessesById(appUser.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found: " + appUser.getId()));
+        requireActorCanManageInvitedUser(currentUser, targetScoped);
         log.info(
                 "Invitation resend requested: invitationId={}, actorId={}, actorUsername={}, userId={}, invitedEmail={}",
                 invitationId, actor.getId(), actor.getUsername(), appUser.getId(), safeEmail(invitation.getInvitedEmail()));
@@ -140,12 +147,16 @@ public class UserInvitationServiceImpl implements UserInvitationService {
     @Override
     @Transactional
     public void revokeInvitation(Long invitationId) {
-        CurrentUserAccessService.CurrentUserAccess currentUser = currentUserAccessService.currentUser();
-        if (!currentUser.isAdmin()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin role required");
-        }
+        CurrentUserAccessService.CurrentUserAccess currentUser = requireAdmin();
         UserInvitation invitation = userInvitationRepository.findById(invitationId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invitation not found: " + invitationId));
+        AppUser invited = invitation.getAppUser();
+        if (invited == null || invited.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation user does not exist");
+        }
+        AppUser targetScoped = appUserRepository.findWithParishAccessesById(invited.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found: " + invited.getId()));
+        requireActorCanManageInvitedUser(currentUser, targetScoped);
         if (invitation.getStatus() != UserInvitationStatus.PENDING) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only pending invitations can be revoked");
         }
@@ -243,8 +254,20 @@ public class UserInvitationServiceImpl implements UserInvitationService {
     }
 
     private AppUser findTargetUser(Long userId) {
-        return appUserRepository.findById(userId)
+        return appUserRepository.findWithParishAccessesById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found: " + userId));
+    }
+
+    private void requireActorCanManageInvitedUser(
+            CurrentUserAccessService.CurrentUserAccess actor,
+            AppUser targetUser
+    ) {
+        if (actor.isSuperAdmin()) {
+            return;
+        }
+        if (!ParishAccessPolicy.sharesParishWithActor(actor.parishIds(), targetUser)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found: " + targetUser.getId());
+        }
     }
 
     private IssueUserInvitationResponse issueInvitationForUser(

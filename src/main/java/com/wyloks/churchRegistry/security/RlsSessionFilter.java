@@ -31,10 +31,9 @@ public class RlsSessionFilter extends OncePerRequestFilter {
         try {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof AppUserDetails details) {
-                String role = details.getRole();
-                boolean isAdmin = role != null && ("ADMIN".equals(role.toUpperCase()) || "SUPER_ADMIN".equals(role.toUpperCase()));
+                boolean superAdminRlsBypass = details.isSuperAdmin();
                 Set<Long> parishIds = details.getParishAccessIds();
-                RlsSessionContext.set(parishIds != null ? parishIds : Collections.emptySet(), isAdmin);
+                RlsSessionContext.set(parishIds != null ? parishIds : Collections.emptySet(), superAdminRlsBypass);
             } else {
                 RlsSessionContext.set(Collections.emptySet(), false);
             }

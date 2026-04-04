@@ -1,6 +1,7 @@
 package com.wyloks.churchRegistry.service;
 
 import com.wyloks.churchRegistry.entity.AppUser;
+import com.wyloks.churchRegistry.entity.Parish;
 import com.wyloks.churchRegistry.entity.UserInvitation;
 import com.wyloks.churchRegistry.entity.UserInvitationEmailDeliveryStatus;
 import com.wyloks.churchRegistry.entity.UserInvitationStatus;
@@ -79,7 +80,8 @@ class UserInvitationServiceImplTest {
                 .build();
 
         when(currentUserAccessService.currentUser())
-                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("admin", "ADMIN", Set.of()));
+                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("admin", "SUPER_ADMIN", Set.of()));
+        when(appUserRepository.findWithParishAccessesById(99L)).thenReturn(Optional.of(target));
         when(userInvitationRepository.findFirstByAppUserIdOrderByCreatedAtDescIdDesc(99L))
                 .thenReturn(Optional.of(invitation));
 
@@ -95,8 +97,14 @@ class UserInvitationServiceImplTest {
 
     @Test
     void getLatestInvitationForUser_returns404WhenNoneExists() {
+        AppUser existing = AppUser.builder()
+                .id(404L)
+                .username("ghost")
+                .email("ghost@example.com")
+                .build();
         when(currentUserAccessService.currentUser())
-                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("admin", "ADMIN", Set.of()));
+                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("admin", "SUPER_ADMIN", Set.of()));
+        when(appUserRepository.findWithParishAccessesById(404L)).thenReturn(Optional.of(existing));
         when(userInvitationRepository.findFirstByAppUserIdOrderByCreatedAtDescIdDesc(404L))
                 .thenReturn(Optional.empty());
 
@@ -154,9 +162,9 @@ class UserInvitationServiceImplTest {
                 .build();
 
         when(currentUserAccessService.currentUser())
-                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("admin", "ADMIN", Set.of()));
+                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("admin", "SUPER_ADMIN", Set.of()));
         when(appUserRepository.findByUsername("admin")).thenReturn(Optional.of(admin));
-        when(appUserRepository.findById(10L)).thenReturn(Optional.of(target));
+        when(appUserRepository.findWithParishAccessesById(10L)).thenReturn(Optional.of(target));
         when(userInvitationRepository.findByAppUserIdAndStatus(10L, UserInvitationStatus.PENDING))
                 .thenReturn(List.of());
         when(userInvitationRepository.save(any(UserInvitation.class))).thenAnswer(invocation -> {
@@ -201,9 +209,9 @@ class UserInvitationServiceImplTest {
                 .build();
 
         when(currentUserAccessService.currentUser())
-                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("admin", "ADMIN", Set.of()));
+                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("admin", "SUPER_ADMIN", Set.of()));
         when(appUserRepository.findByUsername("admin")).thenReturn(Optional.of(admin));
-        when(appUserRepository.findById(20L)).thenReturn(Optional.of(target));
+        when(appUserRepository.findWithParishAccessesById(20L)).thenReturn(Optional.of(target));
         when(userInvitationRepository.findByAppUserIdAndStatus(20L, UserInvitationStatus.PENDING))
                 .thenReturn(List.of(existingPending));
         when(userInvitationRepository.save(any(UserInvitation.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -233,9 +241,9 @@ class UserInvitationServiceImplTest {
                 .build();
 
         when(currentUserAccessService.currentUser())
-                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("admin", "ADMIN", Set.of()));
+                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("admin", "SUPER_ADMIN", Set.of()));
         when(appUserRepository.findByUsername("admin")).thenReturn(Optional.of(admin));
-        when(appUserRepository.findById(30L)).thenReturn(Optional.of(target));
+        when(appUserRepository.findWithParishAccessesById(30L)).thenReturn(Optional.of(target));
         when(userInvitationRepository.findByAppUserIdAndStatus(30L, UserInvitationStatus.PENDING))
                 .thenReturn(List.of());
         when(userInvitationRepository.save(any(UserInvitation.class))).thenAnswer(invocation -> {
@@ -296,9 +304,10 @@ class UserInvitationServiceImplTest {
                 .build();
 
         when(currentUserAccessService.currentUser())
-                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("admin", "ADMIN", Set.of()));
+                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("admin", "SUPER_ADMIN", Set.of()));
         when(appUserRepository.findByUsername("admin")).thenReturn(Optional.of(admin));
         when(userInvitationRepository.findById(400L)).thenReturn(Optional.of(priorInvitation));
+        when(appUserRepository.findWithParishAccessesById(40L)).thenReturn(Optional.of(target));
         when(userInvitationRepository.findByAppUserIdAndStatus(40L, UserInvitationStatus.PENDING))
                 .thenReturn(List.of(existingPending));
         when(userInvitationRepository.save(any(UserInvitation.class))).thenAnswer(invocation -> {
@@ -346,9 +355,10 @@ class UserInvitationServiceImplTest {
                 .build();
 
         when(currentUserAccessService.currentUser())
-                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("admin", "ADMIN", Set.of()));
+                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("admin", "SUPER_ADMIN", Set.of()));
         when(appUserRepository.findByUsername("admin")).thenReturn(Optional.of(admin));
         when(userInvitationRepository.findById(410L)).thenReturn(Optional.of(priorInvitation));
+        when(appUserRepository.findWithParishAccessesById(41L)).thenReturn(Optional.of(target));
 
         assertThatThrownBy(() -> service.resendInvitation(410L))
                 .isInstanceOf(ResponseStatusException.class)
@@ -374,9 +384,9 @@ class UserInvitationServiceImplTest {
                 .build();
 
         when(currentUserAccessService.currentUser())
-                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("admin", "ADMIN", Set.of()));
+                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("admin", "SUPER_ADMIN", Set.of()));
         when(appUserRepository.findByUsername("admin")).thenReturn(Optional.of(admin));
-        when(appUserRepository.findById(50L)).thenReturn(Optional.of(target));
+        when(appUserRepository.findWithParishAccessesById(50L)).thenReturn(Optional.of(target));
         when(userInvitationRepository.findByAppUserIdAndStatus(50L, UserInvitationStatus.PENDING))
                 .thenReturn(List.of());
         when(userInvitationRepository.save(any(UserInvitation.class))).thenAnswer(invocation -> {
@@ -391,5 +401,53 @@ class UserInvitationServiceImplTest {
         var response = service.issueInvitation(50L);
 
         assertThat(response.getToken()).isNotBlank();
+    }
+
+    @Test
+    void issueInvitation_whenParishScopedAdmin_noParishOverlap_returns404() {
+        AppUser actor = AppUser.builder().id(1L).username("parishAdmin").build();
+        Parish foreignParish = Parish.builder().id(200L).build();
+        AppUser target = AppUser.builder()
+                .id(99L)
+                .username("foreign")
+                .email("foreign@example.com")
+                .parishAccesses(Set.of(foreignParish))
+                .build();
+
+        when(currentUserAccessService.currentUser())
+                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("parishAdmin", "ADMIN", Set.of(100L)));
+        when(appUserRepository.findByUsername("parishAdmin")).thenReturn(Optional.of(actor));
+        when(appUserRepository.findWithParishAccessesById(99L)).thenReturn(Optional.of(target));
+
+        assertThatThrownBy(() -> service.issueInvitation(99L))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> {
+                    ResponseStatusException r = (ResponseStatusException) ex;
+                    assertThat(r.getStatusCode().value()).isEqualTo(404);
+                    assertThat(r.getReason()).isEqualTo("User not found: 99");
+                });
+    }
+
+    @Test
+    void getLatestInvitationForUser_whenParishScopedAdmin_noParishOverlap_returns404() {
+        Parish foreignParish = Parish.builder().id(200L).build();
+        AppUser target = AppUser.builder()
+                .id(88L)
+                .username("other")
+                .email("other@example.com")
+                .parishAccesses(Set.of(foreignParish))
+                .build();
+
+        when(currentUserAccessService.currentUser())
+                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("parishAdmin", "ADMIN", Set.of(100L)));
+        when(appUserRepository.findWithParishAccessesById(88L)).thenReturn(Optional.of(target));
+
+        assertThatThrownBy(() -> service.getLatestInvitationForUser(88L))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> {
+                    ResponseStatusException r = (ResponseStatusException) ex;
+                    assertThat(r.getStatusCode().value()).isEqualTo(404);
+                    assertThat(r.getReason()).isEqualTo("User not found: 88");
+                });
     }
 }
