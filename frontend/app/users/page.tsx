@@ -8,8 +8,11 @@ import {
   getStoredUser,
   listUsersWithParishAccess,
   replaceUserParishAccess,
+  getLatestUserInvitation,
+  resendUserInvitation,
   fetchDioceses,
   fetchParishes,
+  type IssueUserInvitationResponse,
   type UserParishAccessResponse,
   type DioceseResponse,
   type ParishResponse,
@@ -29,6 +32,10 @@ export default function UsersPage() {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [latestInvitation, setLatestInvitation] = useState<IssueUserInvitationResponse | null>(null);
+  const [invitationLoading, setInvitationLoading] = useState(false);
+  const [invitationError, setInvitationError] = useState<string | null>(null);
+  const [resendingInvitation, setResendingInvitation] = useState(false);
 
   const selectedUser = users.find((u) => u.userId === selectedUserId);
   const allParishes = Object.values(parishesByDiocese).flat();
@@ -68,6 +75,37 @@ export default function UsersPage() {
     if (!isAdminOrSuperAdmin(user?.role)) return;
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (selectedUserId == null) {
+      setLatestInvitation(null);
+      setInvitationError(null);
+      setInvitationLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setInvitationLoading(true);
+    setInvitationError(null);
+    getLatestUserInvitation(selectedUserId)
+      .then((invitation) => {
+        if (cancelled) return;
+        setLatestInvitation(invitation);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setInvitationError(e instanceof Error ? e.message : 'Failed to load invitation');
+        setLatestInvitation(null);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setInvitationLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedUserId]);
 
   const user = getStoredUser();
   if (user && !isAdminOrSuperAdmin(user.role)) {
@@ -118,6 +156,7 @@ export default function UsersPage() {
                     onClick={() => {
                       setSelectedUserId(u.userId);
                       setSaveError(null);
+                      setInvitationError(null);
                     }}
                     className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
                       selectedUserId === u.userId
@@ -149,6 +188,25 @@ export default function UsersPage() {
               saving={saving}
               saveError={saveError}
               onSaveError={setSaveError}
+              latestInvitation={latestInvitation}
+              invitationLoading={invitationLoading}
+              invitationError={invitationError}
+              resendingInvitation={resendingInvitation}
+              onResend={async () => {
+                if (!latestInvitation?.invitationId || resendingInvitation) {
+                  return;
+                }
+                setInvitationError(null);
+                setResendingInvitation(true);
+                try {
+                  const resent = await resendUserInvitation(latestInvitation.invitationId);
+                  setLatestInvitation(resent);
+                } catch (e) {
+                  setInvitationError(e instanceof Error ? e.message : 'Failed to resend invitation');
+                } finally {
+                  setResendingInvitation(false);
+                }
+              }}
               onSave={async (parishIds, defaultParishId) => {
                 setSaveError(null);
                 setSaving(true);
@@ -197,6 +255,11 @@ function UserParishAccessForm({
   saving,
   saveError,
   onSaveError,
+  latestInvitation,
+  invitationLoading,
+  invitationError,
+  resendingInvitation,
+  onResend,
   onSave,
 }: {
   user: UserParishAccessResponse;
@@ -206,6 +269,11 @@ function UserParishAccessForm({
   saving: boolean;
   saveError: string | null;
   onSaveError: (msg: string | null) => void;
+  latestInvitation: IssueUserInvitationResponse | null;
+  invitationLoading: boolean;
+  invitationError: string | null;
+  resendingInvitation: boolean;
+  onResend: () => Promise<void>;
   onSave: (parishIds: number[], defaultParishId: number | null) => Promise<void>;
 }) {
   const [parishIds, setParishIds] = useState<Set<number>>(
@@ -254,6 +322,45 @@ function UserParishAccessForm({
       <p className="mt-0.5 text-sm text-gray-500">
         {user.username} · {user.role ?? '—'}
       </p>
+
+      <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
+        <p className="text-sm font-medium text-gray-800">Invitation</p>
+        {invitationLoading ? (
+          <p className="mt-1 text-sm text-gray-600">Loading invitation status…</p>
+        ) : latestInvitation ? (
+          <>
+            <p className="mt-1 text-sm text-gray-700">
+              Status: {latestInvitation.invitationStatus ?? 'UNKNOWN'} · Delivery: {latestInvitation.emailDeliveryStatus ?? 'UNKNOWN'}
+            </p>
+            <p className="mt-1 text-xs text-gray-600">
+              Email: {latestInvitation.invitedEmail || 'unknown recipient'}
+            </p>
+            {latestInvitation.deliveryMessage && (
+              <p className="mt-1 text-xs text-gray-600">{latestInvitation.deliveryMessage}</p>
+            )}
+            {latestInvitation.lastEmailError && (
+              <p className="mt-1 text-xs text-amber-700">Last error: {latestInvitation.lastEmailError}</p>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                void onResend();
+              }}
+              disabled={resendingInvitation}
+              className="mt-3 rounded-lg bg-sancta-maroon px-3 py-1.5 text-xs font-medium text-white hover:bg-sancta-maroon-dark disabled:opacity-50"
+            >
+              {resendingInvitation ? 'Resending…' : 'Resend invitation email'}
+            </button>
+          </>
+        ) : (
+          <p className="mt-1 text-sm text-gray-600">
+            No invitation found for this user yet. Issue one from User Setup.
+          </p>
+        )}
+        {invitationError && (
+          <p role="alert" className="mt-2 text-sm text-red-600">{invitationError}</p>
+        )}
+      </div>
 
       <div className="mt-4">
         <label className="block text-sm font-medium text-gray-700">

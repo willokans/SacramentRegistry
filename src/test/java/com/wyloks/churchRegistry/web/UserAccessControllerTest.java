@@ -153,7 +153,7 @@ class UserAccessControllerTest {
     }
 
     @Test
-    void issueInvitation_returns201AndTokenPayload() throws Exception {
+    void issueInvitation_returns201AndDeliveryAwarePayload() throws Exception {
         IssueUserInvitationRequest request = IssueUserInvitationRequest.builder()
                 .userId(99L)
                 .build();
@@ -161,8 +161,9 @@ class UserAccessControllerTest {
                 .invitationId(44L)
                 .userId(99L)
                 .invitedEmail("newuser@example.com")
-                .token("raw-token-value")
                 .expiresAt(java.time.Instant.now().plusSeconds(3600))
+                .emailDeliveryStatus(com.wyloks.churchRegistry.entity.UserInvitationEmailDeliveryStatus.FAILED)
+                .deliveryMessage("Invitation created, but email delivery failed. Please use resend to try again.")
                 .build();
         when(userInvitationService.issueInvitation(99L)).thenReturn(response);
 
@@ -173,18 +174,21 @@ class UserAccessControllerTest {
                 .andExpect(jsonPath("$.invitationId").value(44))
                 .andExpect(jsonPath("$.userId").value(99))
                 .andExpect(jsonPath("$.invitedEmail").value("newuser@example.com"))
-                .andExpect(jsonPath("$.token").value("raw-token-value"))
+                .andExpect(jsonPath("$.token").doesNotExist())
+                .andExpect(jsonPath("$.emailDeliveryStatus").value("FAILED"))
+                .andExpect(jsonPath("$.deliveryMessage").value("Invitation created, but email delivery failed. Please use resend to try again."))
                 .andExpect(jsonPath("$.expiresAt").exists());
     }
 
     @Test
-    void resendInvitation_returns201AndTokenPayload() throws Exception {
+    void resendInvitation_returns201AndDeliveryAwarePayload() throws Exception {
         IssueUserInvitationResponse response = IssueUserInvitationResponse.builder()
                 .invitationId(45L)
                 .userId(99L)
                 .invitedEmail("newuser@example.com")
-                .token("resend-token-value")
                 .expiresAt(java.time.Instant.now().plusSeconds(7200))
+                .emailDeliveryStatus(com.wyloks.churchRegistry.entity.UserInvitationEmailDeliveryStatus.SENT)
+                .deliveryMessage("Invitation email sent.")
                 .build();
         when(userInvitationService.resendInvitation(44L)).thenReturn(response);
 
@@ -192,7 +196,33 @@ class UserAccessControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.invitationId").value(45))
                 .andExpect(jsonPath("$.userId").value(99))
-                .andExpect(jsonPath("$.token").value("resend-token-value"));
+                .andExpect(jsonPath("$.token").doesNotExist())
+                .andExpect(jsonPath("$.emailDeliveryStatus").value("SENT"))
+                .andExpect(jsonPath("$.deliveryMessage").value("Invitation email sent."));
+    }
+
+    @Test
+    void getLatestInvitation_returns200AndDeliveryAwarePayload() throws Exception {
+        IssueUserInvitationResponse response = IssueUserInvitationResponse.builder()
+                .invitationId(45L)
+                .userId(99L)
+                .invitedEmail("newuser@example.com")
+                .expiresAt(java.time.Instant.now().plusSeconds(7200))
+                .emailDeliveryStatus(com.wyloks.churchRegistry.entity.UserInvitationEmailDeliveryStatus.FAILED)
+                .invitationStatus(com.wyloks.churchRegistry.entity.UserInvitationStatus.PENDING)
+                .lastEmailError("Authentication failed")
+                .deliveryMessage("Invitation created, but email delivery failed. Please use resend to try again.")
+                .build();
+        when(userInvitationService.getLatestInvitationForUser(99L)).thenReturn(response);
+
+        mvc.perform(get("/api/admin/users/99/invitation/latest"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.invitationId").value(45))
+                .andExpect(jsonPath("$.userId").value(99))
+                .andExpect(jsonPath("$.token").doesNotExist())
+                .andExpect(jsonPath("$.invitationStatus").value("PENDING"))
+                .andExpect(jsonPath("$.emailDeliveryStatus").value("FAILED"))
+                .andExpect(jsonPath("$.lastEmailError").value("Authentication failed"));
     }
 
     @Test

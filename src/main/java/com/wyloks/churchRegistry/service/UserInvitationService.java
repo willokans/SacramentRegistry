@@ -6,6 +6,8 @@ public interface UserInvitationService {
 
     IssueUserInvitationResponse issueInvitation(Long userId);
 
+    IssueUserInvitationResponse getLatestInvitationForUser(Long userId);
+
     IssueUserInvitationResponse resendInvitation(Long invitationId);
 
     void revokeInvitation(Long invitationId);

@@ -1794,8 +1794,41 @@ export interface IssueUserInvitationResponse {
   invitationId: number;
   userId: number;
   invitedEmail: string;
-  token: string;
+  token?: string | null;
   expiresAt: string;
+  invitationStatus?: 'PENDING' | 'ACCEPTED' | 'REVOKED' | 'EXPIRED' | null;
+  emailDeliveryStatus?: 'PENDING' | 'SENT' | 'FAILED' | null;
+  lastEmailAttemptAt?: string | null;
+  lastEmailError?: string | null;
+  emailSentAt?: string | null;
+  deliveryMessage?: string | null;
+}
+
+function mapIssueUserInvitationResponse(payload: any): IssueUserInvitationResponse {
+  return {
+    invitationId: Number(payload?.invitationId),
+    userId: Number(payload?.userId),
+    invitedEmail: String(payload?.invitedEmail ?? ''),
+    token: payload?.token == null ? null : String(payload.token),
+    expiresAt: String(payload?.expiresAt ?? ''),
+    invitationStatus:
+      payload?.invitationStatus === 'PENDING' ||
+      payload?.invitationStatus === 'ACCEPTED' ||
+      payload?.invitationStatus === 'REVOKED' ||
+      payload?.invitationStatus === 'EXPIRED'
+        ? payload.invitationStatus
+        : null,
+    emailDeliveryStatus:
+      payload?.emailDeliveryStatus === 'PENDING' ||
+      payload?.emailDeliveryStatus === 'SENT' ||
+      payload?.emailDeliveryStatus === 'FAILED'
+        ? payload.emailDeliveryStatus
+        : null,
+    lastEmailAttemptAt: payload?.lastEmailAttemptAt == null ? null : String(payload.lastEmailAttemptAt),
+    lastEmailError: payload?.lastEmailError == null ? null : String(payload.lastEmailError),
+    emailSentAt: payload?.emailSentAt == null ? null : String(payload.emailSentAt),
+    deliveryMessage: payload?.deliveryMessage == null ? null : String(payload.deliveryMessage),
+  };
 }
 
 export async function createUser(request: CreateUserRequest): Promise<UserParishAccessResponse> {
@@ -1849,13 +1882,35 @@ export async function issueUserInvitation(userId: number): Promise<IssueUserInvi
     throw new Error(parseErrorResponse(text, 'Failed to issue invitation'));
   }
   const payload = await res.json();
-  return {
-    invitationId: Number(payload?.invitationId),
-    userId: Number(payload?.userId),
-    invitedEmail: String(payload?.invitedEmail ?? ''),
-    token: String(payload?.token ?? ''),
-    expiresAt: String(payload?.expiresAt ?? ''),
-  };
+  return mapIssueUserInvitationResponse(payload);
+}
+
+export async function resendUserInvitation(invitationId: number): Promise<IssueUserInvitationResponse> {
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/admin/users/invitations/${invitationId}/resend`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(parseErrorResponse(text, 'Failed to resend invitation'));
+  }
+  const payload = await res.json();
+  return mapIssueUserInvitationResponse(payload);
+}
+
+export async function getLatestUserInvitation(userId: number): Promise<IssueUserInvitationResponse | null> {
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/admin/users/${userId}/invitation/latest`, {
+    headers: getAuthHeaders(),
+  });
+  if (res.status === 404) {
+    return null;
+  }
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(parseErrorResponse(text, 'Failed to load latest invitation'));
+  }
+  const payload = await res.json();
+  return mapIssueUserInvitationResponse(payload);
 }
 
 export async function replaceUserParishAccess(

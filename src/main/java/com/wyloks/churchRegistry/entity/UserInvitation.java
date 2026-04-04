@@ -32,8 +32,21 @@ public class UserInvitation {
     @Column(name = "status", nullable = false, length = 20)
     private UserInvitationStatus status;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "email_delivery_status", nullable = false, length = 20)
+    private UserInvitationEmailDeliveryStatus emailDeliveryStatus;
+
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
+
+    @Column(name = "email_sent_at")
+    private Instant emailSentAt;
+
+    @Column(name = "last_email_attempt_at")
+    private Instant lastEmailAttemptAt;
+
+    @Column(name = "last_email_error", length = 1024)
+    private String lastEmailError;
 
     @Column(name = "accepted_at")
     private Instant acceptedAt;

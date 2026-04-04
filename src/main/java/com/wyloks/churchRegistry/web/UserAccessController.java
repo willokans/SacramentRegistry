@@ -45,6 +45,11 @@ public class UserAccessController {
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
+    @GetMapping("/{id}/invitation/latest")
+    public ResponseEntity<IssueUserInvitationResponse> getLatestInvitation(@PathVariable("id") Long userId) {
+        return ResponseEntity.ok(userInvitationService.getLatestInvitationForUser(userId));
+    }
+
     @PostMapping("/invitations/{invitationId}/revoke")
     public ResponseEntity<Void> revokeInvitation(@PathVariable Long invitationId) {
         userInvitationService.revokeInvitation(invitationId);

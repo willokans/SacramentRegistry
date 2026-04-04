@@ -14,6 +14,8 @@ import {
   fetchDioceses,
   fetchParishes,
   replaceUserParishAccess,
+  getLatestUserInvitation,
+  resendUserInvitation,
 } from '@/lib/api';
 import { getStoredToken, getStoredUser } from '@/lib/api';
 import { useParish } from '@/context/ParishContext';
@@ -31,6 +33,8 @@ jest.mock('@/lib/api', () => ({
   fetchDioceses: jest.fn(),
   fetchParishes: jest.fn(),
   replaceUserParishAccess: jest.fn(),
+  getLatestUserInvitation: jest.fn(),
+  resendUserInvitation: jest.fn(),
 }));
 
 jest.mock('@/context/ParishContext', () => ({
@@ -85,6 +89,8 @@ describe('Users page (User Access)', () => {
     (fetchDioceses as jest.Mock).mockResolvedValue(mockDioceses);
     (fetchParishes as jest.Mock).mockResolvedValue(mockParishes);
     (replaceUserParishAccess as jest.Mock).mockClear();
+    (getLatestUserInvitation as jest.Mock).mockResolvedValue(null);
+    (resendUserInvitation as jest.Mock).mockClear();
   });
 
   it('fetches users and dioceses on load', async () => {
@@ -135,6 +141,43 @@ describe('Users page (User Access)', () => {
     expect(screen.getAllByText(/priest@church\.com/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Default parish')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /save parish access/i })).toBeInTheDocument();
+  });
+
+  it('allows resending latest invitation from users page', async () => {
+    (getLatestUserInvitation as jest.Mock).mockResolvedValue({
+      invitationId: 44,
+      userId: 2,
+      invitedEmail: 'priest@church.com',
+      expiresAt: new Date().toISOString(),
+      invitationStatus: 'PENDING',
+      emailDeliveryStatus: 'FAILED',
+      deliveryMessage: 'Invitation created, but email delivery failed. Please use resend to try again.',
+      lastEmailError: 'Authentication failed',
+    });
+    (resendUserInvitation as jest.Mock).mockResolvedValue({
+      invitationId: 45,
+      userId: 2,
+      invitedEmail: 'priest@church.com',
+      expiresAt: new Date().toISOString(),
+      invitationStatus: 'PENDING',
+      emailDeliveryStatus: 'SENT',
+      deliveryMessage: 'Invitation email sent.',
+      lastEmailError: null,
+    });
+
+    render(<UsersPage />);
+    await waitFor(() => {
+      expect(screen.getByText('Fr. John')).toBeInTheDocument();
+    });
+    await userEvent.click(screen.getByRole('button', { name: /fr\. john/i }));
+    await waitFor(() => {
+      expect(getLatestUserInvitation).toHaveBeenCalledWith(2);
+    });
+    await userEvent.click(screen.getByRole('button', { name: /resend invitation email/i }));
+    await waitFor(() => {
+      expect(resendUserInvitation).toHaveBeenCalledWith(44);
+    });
+    expect(screen.getByText(/delivery: SENT/i)).toBeInTheDocument();
   });
 
   it('shows parish checkboxes grouped by diocese', async () => {

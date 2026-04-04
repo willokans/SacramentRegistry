@@ -8,8 +8,10 @@ import {
   getStoredUser,
   createUser,
   issueUserInvitation,
+  resendUserInvitation,
   fetchDioceses,
   fetchParishes,
+  type IssueUserInvitationResponse,
   type DioceseResponse,
   type ParishResponse,
 } from '@/lib/api';
@@ -32,9 +34,14 @@ export default function UserSetupPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
-  const [inviteExpiresAt, setInviteExpiresAt] = useState<string | null>(null);
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [inviteResult, setInviteResult] = useState<{
+    displayName: string;
+    invitationId: number;
+    invitedEmail: string;
+    emailDeliveryStatus: 'PENDING' | 'SENT' | 'FAILED' | null;
+    deliveryMessage: string | null;
+  } | null>(null);
+  const [resendingInvitation, setResendingInvitation] = useState(false);
 
   useEffect(() => {
     const user = getStoredUser();
@@ -112,35 +119,52 @@ export default function UserSetupPage() {
         </div>
       )}
 
-      {inviteLink && (
-        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900">
-          <p className="text-sm font-semibold">Invite link</p>
-          <p className="mt-1 text-xs">
-            Share this one-time link with the user. It expires {inviteExpiresAt ?? 'soon'}.
+      {inviteResult?.emailDeliveryStatus === 'FAILED' && (
+        <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900">
+          <p className="text-sm font-semibold">Invite delivery issue</p>
+          <p className="mt-1 text-sm">Invite created, but email delivery failed. Please resend.</p>
+          <p className="mt-1 text-xs text-amber-800">
+            Recipient: {inviteResult.invitedEmail || 'unknown recipient'}
           </p>
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-            <input
-              readOnly
-              value={inviteLink}
-              className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs text-gray-800"
-            />
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(inviteLink);
-                  setCopyState('copied');
-                } catch {
-                  setCopyState('failed');
+          {inviteResult.deliveryMessage && (
+            <p className="mt-1 text-xs text-amber-800">{inviteResult.deliveryMessage}</p>
+          )}
+          <button
+            type="button"
+            onClick={async () => {
+              if (!inviteResult?.invitationId || resendingInvitation) return;
+              setResendingInvitation(true);
+              setError(null);
+              setSuccessMessage(null);
+              try {
+                const resent = await resendUserInvitation(inviteResult.invitationId);
+                if (!resent.invitationId || Number.isNaN(resent.invitationId)) {
+                  throw new Error('Resend completed but no invitation ID was returned.');
                 }
-              }}
-              className="rounded-lg bg-sancta-maroon px-4 py-2 text-sm font-medium text-white hover:bg-sancta-maroon-dark"
-            >
-              Copy link
-            </button>
-          </div>
-          {copyState === 'copied' && <p className="mt-2 text-xs text-green-700">Copied to clipboard.</p>}
-          {copyState === 'failed' && <p className="mt-2 text-xs text-red-700">Could not copy. Copy manually.</p>}
+                const nextStatus = resent.emailDeliveryStatus ?? null;
+                setInviteResult((prev) => ({
+                  displayName: prev?.displayName ?? inviteResult.displayName,
+                  invitationId: resent.invitationId,
+                  invitedEmail: resent.invitedEmail || prev?.invitedEmail || inviteResult.invitedEmail,
+                  emailDeliveryStatus: nextStatus,
+                  deliveryMessage: resent.deliveryMessage ?? null,
+                }));
+                if (nextStatus === 'SENT') {
+                  setSuccessMessage(`Invitation email resent successfully for "${inviteResult.displayName}".`);
+                } else if (nextStatus === 'PENDING') {
+                  setSuccessMessage(`Resend started for "${inviteResult.displayName}". Email delivery is pending.`);
+                }
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'Failed to resend invitation');
+              } finally {
+                setResendingInvitation(false);
+              }
+            }}
+            disabled={resendingInvitation}
+            className="mt-3 rounded-lg bg-sancta-maroon px-4 py-2 text-sm font-medium text-white hover:bg-sancta-maroon-dark disabled:opacity-50"
+          >
+            {resendingInvitation ? 'Resending…' : 'Resend invitation email'}
+          </button>
         </div>
       )}
 
@@ -148,21 +172,28 @@ export default function UserSetupPage() {
         <CreateUserForm
           dioceses={dioceses}
           parishesByDiocese={parishesByDiocese}
-          onSuccess={({ displayName, inviteLink: createdInviteLink, expiresAt }) => {
-            setSuccessMessage(
-              `User "${displayName}" created and invite issued successfully.`
-            );
-            setInviteLink(createdInviteLink);
-            setInviteExpiresAt(new Date(expiresAt).toLocaleString());
-            setCopyState('idle');
+          onSuccess={({ displayName, invitation }) => {
+            const deliveryStatus = invitation.emailDeliveryStatus ?? null;
+            if (deliveryStatus === 'SENT') {
+              setSuccessMessage(`User "${displayName}" created and invitation email sent successfully.`);
+            } else if (deliveryStatus === 'PENDING') {
+              setSuccessMessage(`User "${displayName}" created. Invitation email delivery is pending.`);
+            } else {
+              setSuccessMessage(`User "${displayName}" created.`);
+            }
+            setInviteResult({
+              displayName,
+              invitationId: invitation.invitationId,
+              invitedEmail: invitation.invitedEmail,
+              emailDeliveryStatus: deliveryStatus,
+              deliveryMessage: invitation.deliveryMessage ?? null,
+            });
             setError(null);
           }}
           onError={(msg) => {
             setError(msg);
             setSuccessMessage(null);
-            setInviteLink(null);
-            setInviteExpiresAt(null);
-            setCopyState('idle');
+            setInviteResult(null);
           }}
         />
       </div>
@@ -178,7 +209,7 @@ function CreateUserForm({
 }: {
   dioceses: DioceseResponse[];
   parishesByDiocese: Record<number, ParishResponse[]>;
-  onSuccess: (payload: { displayName: string; inviteLink: string; expiresAt: string }) => void;
+  onSuccess: (payload: { displayName: string; invitation: IssueUserInvitationResponse }) => void;
   onError: (msg: string) => void;
 }) {
   const [title, setTitle] = useState('');
@@ -263,18 +294,13 @@ function CreateUserForm({
         throw new Error('User was created but no user ID was returned for invitation.');
       }
       const invitation = await issueUserInvitation(created.userId);
-      if (!invitation.token) {
-        throw new Error('Invitation was created but no token was returned.');
+      if (!invitation.invitationId || Number.isNaN(invitation.invitationId)) {
+        throw new Error('Invitation was created but no invitation ID was returned.');
       }
-      const inviteLink =
-        typeof window !== 'undefined'
-          ? `${window.location.origin}/accept-invite?token=${encodeURIComponent(invitation.token)}`
-          : `/accept-invite?token=${encodeURIComponent(invitation.token)}`;
       const displayName = created.displayName || created.username;
       onSuccess({
         displayName,
-        inviteLink,
-        expiresAt: invitation.expiresAt,
+        invitation,
       });
       setTitle('');
       setFirstName('');

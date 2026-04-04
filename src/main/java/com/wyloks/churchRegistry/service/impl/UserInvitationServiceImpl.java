@@ -3,12 +3,15 @@ package com.wyloks.churchRegistry.service.impl;
 import com.wyloks.churchRegistry.dto.IssueUserInvitationResponse;
 import com.wyloks.churchRegistry.entity.AppUser;
 import com.wyloks.churchRegistry.entity.UserInvitation;
+import com.wyloks.churchRegistry.entity.UserInvitationEmailDeliveryStatus;
 import com.wyloks.churchRegistry.entity.UserInvitationStatus;
 import com.wyloks.churchRegistry.repository.AppUserRepository;
 import com.wyloks.churchRegistry.repository.UserInvitationRepository;
 import com.wyloks.churchRegistry.security.CurrentUserAccessService;
+import com.wyloks.churchRegistry.service.InvitationEmailService;
 import com.wyloks.churchRegistry.service.UserInvitationService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -19,11 +22,13 @@ import org.springframework.web.server.ResponseStatusException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserInvitationServiceImpl implements UserInvitationService {
@@ -32,67 +37,84 @@ public class UserInvitationServiceImpl implements UserInvitationService {
     private final AppUserRepository appUserRepository;
     private final CurrentUserAccessService currentUserAccessService;
     private final PasswordEncoder passwordEncoder;
+    private final InvitationEmailService invitationEmailService;
 
     @Value("${app.user-invitation.expiration-ms:604800000}")
     private long invitationExpirationMs;
 
+    @Value("${app.user-invitation.expose-token-in-response:false}")
+    private boolean exposeTokenInResponse;
+
+    @Value("${app.user-invitation.resend-cooldown-ms:900000}")
+    private long resendCooldownMs;
+
     @Override
     @Transactional
     public IssueUserInvitationResponse issueInvitation(Long userId) {
-        CurrentUserAccessService.CurrentUserAccess currentUser = currentUserAccessService.currentUser();
-        if (!currentUser.isAdmin()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin role required");
-        }
+        CurrentUserAccessService.CurrentUserAccess currentUser = requireAdmin();
+        AppUser createdByUser = findCurrentActor(currentUser);
+        AppUser targetUser = findTargetUser(userId);
+        return issueInvitationForUser(targetUser, createdByUser, "ISSUE", null);
+    }
 
-        AppUser createdByUser = appUserRepository.findByUsername(currentUser.username())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Current user not found"));
-
-        AppUser targetUser = appUserRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found: " + userId));
-
-        String invitedEmail = targetUser.getEmail();
-        if (invitedEmail == null || invitedEmail.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User must have an email address to receive an invitation");
-        }
-
-        Instant now = Instant.now();
-        revokePendingInvitations(targetUser.getId(), now);
-
-        String rawToken = UUID.randomUUID().toString().replace("-", "") + UUID.randomUUID().toString().replace("-", "");
-        UserInvitation invitation = UserInvitation.builder()
-                .appUser(targetUser)
-                .tokenHash(hashToken(rawToken))
-                .invitedEmail(invitedEmail.trim())
-                .status(UserInvitationStatus.PENDING)
-                .expiresAt(now.plusMillis(invitationExpirationMs))
-                .createdByUser(createdByUser)
-                .createdAt(now)
-                .updatedAt(now)
-                .build();
-        userInvitationRepository.save(invitation);
-
-        targetUser.setMustResetPassword(true);
-        appUserRepository.save(targetUser);
-
-        return IssueUserInvitationResponse.builder()
-                .invitationId(invitation.getId())
-                .userId(targetUser.getId())
-                .invitedEmail(invitation.getInvitedEmail())
-                .token(rawToken)
-                .expiresAt(invitation.getExpiresAt())
-                .build();
+    @Override
+    @Transactional(readOnly = true)
+    public IssueUserInvitationResponse getLatestInvitationForUser(Long userId) {
+        requireAdmin();
+        UserInvitation invitation = userInvitationRepository.findFirstByAppUserIdOrderByCreatedAtDescIdDesc(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invitation not found for user: " + userId));
+        return buildInvitationResponse(invitation, null);
     }
 
     @Override
     @Transactional
     public IssueUserInvitationResponse resendInvitation(Long invitationId) {
+        CurrentUserAccessService.CurrentUserAccess currentUser = requireAdmin();
+        AppUser actor = findCurrentActor(currentUser);
         UserInvitation invitation = userInvitationRepository.findById(invitationId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invitation not found: " + invitationId));
         AppUser appUser = invitation.getAppUser();
         if (appUser == null || appUser.getId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation user does not exist");
         }
-        return issueInvitation(appUser.getId());
+        log.info(
+                "Invitation resend requested: invitationId={}, actorId={}, actorUsername={}, userId={}, invitedEmail={}",
+                invitationId, actor.getId(), actor.getUsername(), appUser.getId(), safeEmail(invitation.getInvitedEmail()));
+        enforceResendCooldown(invitation, actor, appUser);
+
+        try {
+            IssueUserInvitationResponse response = issueInvitationForUser(appUser, actor, "RESEND", invitationId);
+            log.info(
+                    "Invitation resend succeeded: sourceInvitationId={}, newInvitationId={}, actorId={}, actorUsername={}, userId={}, invitedEmail={}, deliveryStatus={}",
+                    invitationId,
+                    response.getInvitationId(),
+                    actor.getId(),
+                    actor.getUsername(),
+                    appUser.getId(),
+                    safeEmail(invitation.getInvitedEmail()),
+                    response.getEmailDeliveryStatus());
+            return response;
+        } catch (ResponseStatusException ex) {
+            log.warn(
+                    "Invitation resend failed: invitationId={}, actorId={}, actorUsername={}, userId={}, invitedEmail={}, error={}",
+                    invitationId,
+                    actor.getId(),
+                    actor.getUsername(),
+                    appUser.getId(),
+                    safeEmail(invitation.getInvitedEmail()),
+                    sanitizeErrorMessage(ex.getReason()));
+            throw ex;
+        } catch (RuntimeException ex) {
+            log.warn(
+                    "Invitation resend failed: invitationId={}, actorId={}, actorUsername={}, userId={}, invitedEmail={}, error={}",
+                    invitationId,
+                    actor.getId(),
+                    actor.getUsername(),
+                    appUser.getId(),
+                    safeEmail(invitation.getInvitedEmail()),
+                    sanitizeErrorMessage(ex.getMessage()));
+            throw ex;
+        }
     }
 
     @Override
@@ -178,8 +200,240 @@ public class UserInvitationServiceImpl implements UserInvitationService {
             invitation.setUpdatedAt(now);
         }
         if (!pendingInvitations.isEmpty()) {
+            log.info("Revoking {} pending invitation(s) for userId={}", pendingInvitations.size(), userId);
             userInvitationRepository.saveAll(pendingInvitations);
         }
+    }
+
+    private CurrentUserAccessService.CurrentUserAccess requireAdmin() {
+        CurrentUserAccessService.CurrentUserAccess currentUser = currentUserAccessService.currentUser();
+        if (!currentUser.isAdmin()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin role required");
+        }
+        return currentUser;
+    }
+
+    private AppUser findCurrentActor(CurrentUserAccessService.CurrentUserAccess currentUser) {
+        return appUserRepository.findByUsername(currentUser.username())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Current user not found"));
+    }
+
+    private AppUser findTargetUser(Long userId) {
+        return appUserRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found: " + userId));
+    }
+
+    private IssueUserInvitationResponse issueInvitationForUser(
+            AppUser targetUser,
+            AppUser actor,
+            String flowType,
+            Long sourceInvitationId
+    ) {
+        String invitedEmail = requireInvitedEmail(targetUser);
+        Instant now = Instant.now();
+
+        String rawToken = generateRawToken();
+        revokePendingInvitations(targetUser.getId(), now);
+        UserInvitation invitation = createPendingInvitation(targetUser, actor, invitedEmail, rawToken, now);
+
+        userInvitationRepository.save(invitation);
+        auditIssueOrResend(flowType, sourceInvitationId, actor, targetUser, invitation);
+
+        targetUser.setMustResetPassword(true);
+        appUserRepository.save(targetUser);
+
+        attemptInvitationEmailSend(invitation, rawToken, actor, flowType, sourceInvitationId);
+        return buildInvitationResponse(invitation, exposeTokenInResponse ? rawToken : null);
+    }
+
+    private UserInvitation createPendingInvitation(
+            AppUser targetUser,
+            AppUser actor,
+            String invitedEmail,
+            String rawToken,
+            Instant now
+    ) {
+        return UserInvitation.builder()
+                .appUser(targetUser)
+                .tokenHash(hashToken(rawToken))
+                .invitedEmail(invitedEmail.trim())
+                .status(UserInvitationStatus.PENDING)
+                .emailDeliveryStatus(UserInvitationEmailDeliveryStatus.PENDING)
+                .expiresAt(now.plusMillis(invitationExpirationMs))
+                .createdByUser(actor)
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
+    }
+
+    private void auditIssueOrResend(
+            String flowType,
+            Long sourceInvitationId,
+            AppUser actor,
+            AppUser targetUser,
+            UserInvitation invitation
+    ) {
+        log.info(
+                "Invitation {} created: invitationId={}, sourceInvitationId={}, actorId={}, actorUsername={}, userId={}, invitedEmail={}",
+                flowType,
+                invitation.getId(),
+                sourceInvitationId,
+                actor.getId(),
+                actor.getUsername(),
+                targetUser.getId(),
+                safeEmail(invitation.getInvitedEmail()));
+    }
+
+    private void attemptInvitationEmailSend(
+            UserInvitation invitation,
+            String rawToken,
+            AppUser actor,
+            String flowType,
+            Long sourceInvitationId
+    ) {
+        Instant attemptedAt = Instant.now();
+        invitation.setLastEmailAttemptAt(attemptedAt);
+        invitation.setUpdatedAt(attemptedAt);
+        try {
+            invitationEmailService.sendInvitationEmail(invitation, rawToken);
+            invitation.setEmailDeliveryStatus(UserInvitationEmailDeliveryStatus.SENT);
+            invitation.setEmailSentAt(attemptedAt);
+            invitation.setLastEmailError(null);
+            log.info(
+                    "Invitation {} email sent: invitationId={}, sourceInvitationId={}, actorId={}, invitedEmail={}",
+                    flowType,
+                    invitation.getId(),
+                    sourceInvitationId,
+                    actor.getId(),
+                    safeEmail(invitation.getInvitedEmail()));
+        } catch (Exception ex) {
+            String sanitizedError = sanitizeEmailError(ex);
+            invitation.setEmailDeliveryStatus(UserInvitationEmailDeliveryStatus.FAILED);
+            invitation.setLastEmailError(sanitizedError);
+            log.warn(
+                    "Invitation {} email failed: invitationId={}, sourceInvitationId={}, actorId={}, invitedEmail={}, error={}",
+                    flowType,
+                    invitation.getId(),
+                    sourceInvitationId,
+                    actor.getId(),
+                    safeEmail(invitation.getInvitedEmail()),
+                    sanitizedError);
+        }
+        userInvitationRepository.save(invitation);
+    }
+
+    private IssueUserInvitationResponse buildInvitationResponse(UserInvitation invitation, String rawToken) {
+        UserInvitationEmailDeliveryStatus deliveryStatus = invitation.getEmailDeliveryStatus();
+        String deliveryMessage = switch (deliveryStatus) {
+            case FAILED -> "Invitation created, but email delivery failed. Please use resend to try again.";
+            case SENT -> "Invitation email sent.";
+            case PENDING -> "Invitation created and pending email delivery.";
+        };
+
+        return IssueUserInvitationResponse.builder()
+                .invitationId(invitation.getId())
+                .userId(invitation.getAppUser().getId())
+                .invitedEmail(invitation.getInvitedEmail())
+                .token(rawToken)
+                .expiresAt(invitation.getExpiresAt())
+                .invitationStatus(invitation.getStatus())
+                .emailDeliveryStatus(deliveryStatus)
+                .lastEmailAttemptAt(invitation.getLastEmailAttemptAt())
+                .lastEmailError(invitation.getLastEmailError())
+                .emailSentAt(invitation.getEmailSentAt())
+                .deliveryMessage(deliveryMessage)
+                .build();
+    }
+
+    private String requireInvitedEmail(AppUser targetUser) {
+        String invitedEmail = targetUser.getEmail();
+        if (invitedEmail == null || invitedEmail.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User must have an email address to receive an invitation");
+        }
+        return invitedEmail.trim();
+    }
+
+    private String generateRawToken() {
+        return UUID.randomUUID().toString().replace("-", "") + UUID.randomUUID().toString().replace("-", "");
+    }
+
+    private void enforceResendCooldown(UserInvitation invitation, AppUser actor, AppUser targetUser) {
+        if (resendCooldownMs <= 0) {
+            return;
+        }
+
+        Instant resendReference = resolveResendReference(invitation);
+        if (resendReference == null) {
+            return;
+        }
+
+        Instant now = Instant.now();
+        Instant nextAllowedAt = resendReference.plusMillis(resendCooldownMs);
+        if (!nextAllowedAt.isAfter(now)) {
+            return;
+        }
+
+        long remainingMs = Duration.between(now, nextAllowedAt).toMillis();
+        String waitTime = formatWaitTime(remainingMs);
+        log.warn(
+                "Invitation resend denied by cooldown: invitationId={}, actorId={}, actorUsername={}, userId={}, invitedEmail={}, retryAfterMs={}",
+                invitation.getId(),
+                actor.getId(),
+                actor.getUsername(),
+                targetUser.getId(),
+                safeEmail(invitation.getInvitedEmail()),
+                remainingMs);
+        throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Resend allowed in " + waitTime + ". Please try again later.");
+    }
+
+    private Instant resolveResendReference(UserInvitation invitation) {
+        if (invitation.getLastEmailAttemptAt() != null) {
+            return invitation.getLastEmailAttemptAt();
+        }
+        if (invitation.getCreatedAt() != null) {
+            return invitation.getCreatedAt();
+        }
+        return invitation.getUpdatedAt();
+    }
+
+    private String formatWaitTime(long remainingMs) {
+        long safeMs = Math.max(0L, remainingMs);
+        long totalSeconds = Math.max(1L, (safeMs + 999L) / 1000L);
+        long minutes = totalSeconds / 60L;
+        long seconds = totalSeconds % 60L;
+        if (minutes > 0 && seconds > 0) {
+            return minutes + "m " + seconds + "s";
+        }
+        if (minutes > 0) {
+            return minutes + "m";
+        }
+        return seconds + "s";
+    }
+
+    private String sanitizeEmailError(Exception ex) {
+        return sanitizeErrorMessage(ex.getMessage(), ex.getClass().getSimpleName());
+    }
+
+    private String sanitizeErrorMessage(String message) {
+        return sanitizeErrorMessage(message, "unknown_error");
+    }
+
+    private String sanitizeErrorMessage(String message, String fallback) {
+        String normalizedMessage = message;
+        if (normalizedMessage == null || normalizedMessage.isBlank()) {
+            normalizedMessage = fallback;
+        }
+        String sanitized = normalizedMessage.replaceAll("[\\r\\n]+", " ").trim();
+        return sanitized.length() > 1024 ? sanitized.substring(0, 1024) : sanitized;
+    }
+
+    private String safeEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return "unknown";
+        }
+        return email.trim();
     }
 
     private void expirePendingInvitations(Instant now) {

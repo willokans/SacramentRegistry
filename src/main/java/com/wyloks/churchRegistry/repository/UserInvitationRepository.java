@@ -14,5 +14,7 @@ public interface UserInvitationRepository extends JpaRepository<UserInvitation, 
 
     List<UserInvitation> findByAppUserIdAndStatus(Long appUserId, UserInvitationStatus status);
 
+    Optional<UserInvitation> findFirstByAppUserIdOrderByCreatedAtDescIdDesc(Long appUserId);
+
     List<UserInvitation> findByStatusAndExpiresAtBefore(UserInvitationStatus status, Instant expiresAt);
 }
