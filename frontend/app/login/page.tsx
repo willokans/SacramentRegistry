@@ -206,6 +206,10 @@ export default function LoginPage() {
               Privacy Notice
             </Link>
             <span className="mx-2 text-gray-300">·</span>
+            <Link href="/terms-of-use" className="text-sm text-sancta-maroon hover:underline focus:outline-none focus:ring-2 focus:ring-sancta-maroon/30 rounded">
+              Terms of Use
+            </Link>
+            <span className="mx-2 text-gray-300">·</span>
             <Link href="/login/forgot-password" className="text-sm text-sancta-maroon hover:underline focus:outline-none focus:ring-2 focus:ring-sancta-maroon/30 rounded">
               Forgot password?
             </Link>

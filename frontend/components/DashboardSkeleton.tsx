@@ -6,7 +6,7 @@
  */
 export default function DashboardSkeleton() {
   return (
-    <div className="space-y-6" aria-busy="true" aria-label="Loading dashboard" data-testid="dashboard-skeleton">
+    <div className="space-y-4" aria-busy="true" aria-label="Loading dashboard" data-testid="dashboard-skeleton">
       {/* Stat cards skeleton */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[1, 2, 3, 4].map((i) => (
@@ -25,12 +25,12 @@ export default function DashboardSkeleton() {
 
       {/* Quick Actions skeleton */}
       <div>
-        <div className="h-5 w-28 rounded bg-gray-200 animate-pulse mb-3" aria-hidden />
-        <div className="flex flex-wrap gap-3">
+        <div className="h-5 w-28 rounded bg-gray-200 animate-pulse mb-2" aria-hidden />
+        <div className="flex flex-wrap gap-2">
           {[1, 2, 3, 4, 5].map((i) => (
             <div
               key={i}
-              className="h-[44px] w-36 rounded-lg bg-gray-200 animate-pulse"
+              className={`rounded-lg bg-gray-200 animate-pulse ${i === 1 ? 'h-[44px] w-40' : 'h-[44px] w-32 border border-gray-100'}`}
               aria-hidden
             />
           ))}
@@ -40,7 +40,7 @@ export default function DashboardSkeleton() {
       {/* Chart skeleton */}
       <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="h-5 w-56 rounded bg-gray-200 animate-pulse mb-1" aria-hidden />
-        <div className="h-3 w-48 rounded bg-gray-200 animate-pulse mb-3" aria-hidden />
+        <div className="h-3 w-48 rounded bg-gray-200 animate-pulse mb-2" aria-hidden />
         <div className="w-full overflow-x-auto pb-1">
           <div className="flex items-end gap-2 h-56 w-full min-w-0 border-b border-gray-100">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((i) => (
@@ -69,9 +69,9 @@ export default function DashboardSkeleton() {
       </section>
 
       {/* Latest records + Recent Activity skeleton */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="h-5 w-44 rounded bg-gray-200 animate-pulse mb-3" aria-hidden />
+          <div className="h-5 w-44 rounded bg-gray-200 animate-pulse mb-2" aria-hidden />
           <ul className="space-y-2">
             {[1, 2, 3, 4, 5].map((i) => (
               <li key={i} className="flex items-center gap-2 py-2">
@@ -83,7 +83,7 @@ export default function DashboardSkeleton() {
           </ul>
         </section>
         <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-2">
             <div className="h-5 w-32 rounded bg-gray-200 animate-pulse" aria-hidden />
             <div className="h-4 w-16 rounded bg-gray-200 animate-pulse" aria-hidden />
           </div>

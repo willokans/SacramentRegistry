@@ -216,6 +216,9 @@ export default function PrivacyNoticePage() {
             <Link href="/data-protection" className="font-medium text-sancta-maroon hover:underline">
               Prefer trust-first summary? Data Protection &amp; Trust
             </Link>
+            <Link href="/terms-of-use" className="font-medium text-sancta-maroon hover:underline">
+              Terms of Use
+            </Link>
             <Link href="/login" className="font-medium text-sancta-maroon hover:underline">
               Go to Login
             </Link>

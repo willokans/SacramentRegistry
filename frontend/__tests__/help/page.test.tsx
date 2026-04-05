@@ -113,6 +113,12 @@ describe('Help page', () => {
     expect(link).toHaveAttribute('href', '/privacy');
   });
 
+  it('links to terms of use from Contact Support section', () => {
+    render(<HelpPage />);
+    const link = screen.getByRole('link', { name: 'Terms of Use →' });
+    expect(link).toHaveAttribute('href', '/terms-of-use');
+  });
+
   it('redirects to /login when not authenticated', () => {
     (getStoredToken as jest.Mock).mockReturnValue(null);
     render(<HelpPage />);

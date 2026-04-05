@@ -467,6 +467,9 @@ export default function LandingPage() {
             <CtaLink href="/privacy" className="text-sm font-medium text-sancta-maroon hover:underline">
               Privacy Notice
             </CtaLink>
+            <CtaLink href="/terms-of-use" className="text-sm font-medium text-sancta-maroon hover:underline">
+              Terms of Use
+            </CtaLink>
             <CtaLink href={ctaLinks.requestAccess} className="text-sm text-gray-600 hover:text-sancta-maroon">
               Request Access for Your Parish
             </CtaLink>

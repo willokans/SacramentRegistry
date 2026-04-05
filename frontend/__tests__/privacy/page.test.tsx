@@ -56,6 +56,7 @@ describe('Privacy notice page', () => {
   it('shows footer navigation links', () => {
     render(<PrivacyNoticePage />);
 
+    expect(screen.getByRole('link', { name: 'Terms of Use' })).toHaveAttribute('href', '/terms-of-use');
     expect(screen.getByRole('link', { name: 'Go to Login' })).toHaveAttribute('href', '/login');
     expect(screen.getByRole('link', { name: 'Back to Home' })).toHaveAttribute('href', '/');
   });

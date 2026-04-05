@@ -86,7 +86,7 @@ describe('AuthenticatedLayout', () => {
         <p>Dashboard content</p>
       </AuthenticatedLayout>
     );
-    expect(screen.getByRole('navigation')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument();
   });
 
   it('renders children when authenticated', () => {
@@ -129,14 +129,35 @@ describe('AuthenticatedLayout', () => {
     expect(helpLink).toHaveAttribute('href', '/help');
   });
 
-  it('Privacy Notice link points to /privacy in authenticated surfaces', () => {
+  it('Trust & Legal footer groups data protection, privacy, and terms in order', () => {
     render(
       <AuthenticatedLayout>
         <p>Dashboard content</p>
       </AuthenticatedLayout>
     );
-    const privacyLinks = screen.getAllByRole('link', { name: 'Privacy Notice' });
-    expect(privacyLinks.some((link) => link.getAttribute('href') === '/privacy')).toBe(true);
+    expect(screen.getByText('Trust & Legal')).toBeInTheDocument();
+    expect(screen.getByText('Learn how your data is handled and protected.')).toBeInTheDocument();
+    const trustNav = screen.getByRole('navigation', { name: 'Trust and legal' });
+    expect(within(trustNav).getByRole('link', { name: 'Data Protection & Trust' })).toHaveAttribute(
+      'href',
+      '/data-protection'
+    );
+    expect(within(trustNav).getByRole('link', { name: 'Privacy' })).toHaveAttribute('href', '/privacy');
+    expect(within(trustNav).getByRole('link', { name: 'Terms' })).toHaveAttribute('href', '/terms-of-use');
+    const trustLinks = within(trustNav).getAllByRole('link');
+    expect(trustLinks.map((a) => a.getAttribute('href'))).toEqual(['/data-protection', '/privacy', '/terms-of-use']);
+  });
+
+  it('main navigation does not duplicate Trust & Legal links', () => {
+    render(
+      <AuthenticatedLayout>
+        <p>Dashboard content</p>
+      </AuthenticatedLayout>
+    );
+    const mainNav = screen.getByRole('navigation', { name: 'Main' });
+    expect(within(mainNav).queryByRole('link', { name: 'Privacy' })).not.toBeInTheDocument();
+    expect(within(mainNav).queryByRole('link', { name: 'Terms' })).not.toBeInTheDocument();
+    expect(within(mainNav).queryByRole('link', { name: 'Data Protection & Trust' })).not.toBeInTheDocument();
   });
 
   it('redirects to /login when no token', () => {

@@ -56,6 +56,12 @@ describe('Login page', () => {
     expect(privacyLink).toHaveAttribute('href', '/privacy');
   });
 
+  it('shows a Terms of Use link', () => {
+    render(<LoginPage />);
+    const termsLink = screen.getByRole('link', { name: 'Terms of Use' });
+    expect(termsLink).toHaveAttribute('href', '/terms-of-use');
+  });
+
   it('shows inactivity sign-out message when reason=idle', () => {
     locationSearch = '?reason=idle';
     render(<LoginPage />);

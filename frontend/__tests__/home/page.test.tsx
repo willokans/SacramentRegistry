@@ -114,6 +114,9 @@ describe('Landing page (home)', () => {
     const dataProtectionLink = screen.getByRole('link', { name: 'Data Protection & Trust' });
     expect(dataProtectionLink).toHaveAttribute('href', '/data-protection');
 
+    const termsLink = screen.getByRole('link', { name: 'Terms of Use' });
+    expect(termsLink).toHaveAttribute('href', '/terms-of-use');
+
     const supportLinks = screen.getAllByRole('link', { name: 'Support' });
     expect(supportLinks[0]).toHaveAttribute('href', 'mailto:support@sacramentregistry.com');
 

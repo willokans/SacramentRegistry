@@ -115,6 +115,9 @@ export default function DataProtectionPage() {
             <Link href="/privacy" className="font-medium text-sancta-maroon hover:underline">
               Need formal legal detail? Read Privacy Notice
             </Link>
+            <Link href="/terms-of-use" className="font-medium text-sancta-maroon hover:underline">
+              Terms of Use
+            </Link>
             <Link href="/" className="font-medium text-sancta-maroon hover:underline">
               Back to Home
             </Link>
@@ -143,6 +146,9 @@ export default function DataProtectionPage() {
             </a>
             <Link href="/privacy" className="font-medium text-sancta-maroon hover:underline">
               View formal Privacy Notice
+            </Link>
+            <Link href="/terms-of-use" className="font-medium text-sancta-maroon hover:underline">
+              Terms of Use
             </Link>
             <Link href="/login" className="font-medium text-sancta-maroon hover:underline">
               Go to Login

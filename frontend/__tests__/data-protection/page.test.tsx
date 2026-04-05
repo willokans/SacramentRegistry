@@ -25,6 +25,11 @@ describe('Data protection and trust page', () => {
 
     expect(screen.getByRole('link', { name: 'info@sacramentregistry.com' })).toHaveAttribute('href', 'mailto:info@sacramentregistry.com');
     expect(screen.getByRole('link', { name: 'View formal Privacy Notice' })).toHaveAttribute('href', '/privacy');
+    const termsLinks = screen.getAllByRole('link', { name: 'Terms of Use' });
+    expect(termsLinks).toHaveLength(2);
+    termsLinks.forEach((link) => {
+      expect(link).toHaveAttribute('href', '/terms-of-use');
+    });
     expect(screen.getByRole('link', { name: 'Go to Login' })).toHaveAttribute('href', '/login');
     expect(screen.getByRole('link', { name: 'Back to Home' })).toHaveAttribute('href', '/');
   });

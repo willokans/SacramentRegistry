@@ -47,6 +47,9 @@ function HelpIcon({ className }: { className?: string }) {
   );
 }
 
+const trustLegalFooterLinkClass =
+  'text-sm text-gray-600 underline-offset-2 decoration-transparent transition-colors duration-150 hover:text-sancta-maroon hover:underline hover:decoration-sancta-maroon/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sancta-maroon/25 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-50 rounded-sm';
+
 export default function AuthenticatedLayout({
   children,
 }: {
@@ -277,7 +280,7 @@ export default function AuthenticatedLayout({
                 </div>
               </div>
             )}
-            <nav className="flex-1 p-4">
+            <nav className="flex-1 p-4" aria-label="Main">
               <ul className="space-y-1">
                 {[
                   ...(isAdmin || isSuperAdmin ? [{ href: '/dashboard/diocese', label: 'Diocese Dashboard' }] : []),
@@ -293,8 +296,6 @@ export default function AuthenticatedLayout({
                   { href: '/marriages', label: 'Marriage' },
                   { href: '/holy-orders', label: 'Holy Order' },
                   { href: '/offline-outbox', label: 'Pending Sync' },
-                  { href: '/help', label: 'Help' },
-                  { href: '/privacy', label: 'Privacy Notice' },
                 ].map(({ href, label }) => (
                   <li key={href}>
                     <Link
@@ -307,6 +308,17 @@ export default function AuthenticatedLayout({
                     </Link>
                   </li>
                 ))}
+                <li className="mt-2 pt-2 border-t border-gray-100">
+                  <Link
+                    href="/help"
+                    prefetch={false}
+                    onClick={closeMobileMenu}
+                    className="block px-3 py-3 rounded-lg text-sancta-maroon font-medium hover:bg-sancta-maroon/10 min-h-[44px] flex items-center gap-2"
+                  >
+                    <HelpIcon className="w-5 h-5 shrink-0" />
+                    Help
+                  </Link>
+                </li>
               </ul>
             </nav>
             <div className="p-4 border-t border-gray-100">
@@ -502,21 +514,13 @@ export default function AuthenticatedLayout({
                 Pending Sync
               </Link>
             </li>
-            <li>
+            <li className="mt-2 pt-2 border-t border-gray-100">
               <Link
                 href="/help"
                 className="block px-3 py-2 rounded-lg text-sancta-maroon font-medium hover:bg-sancta-maroon/10 flex items-center gap-2"
               >
                 <HelpIcon className="w-4 h-4 shrink-0" />
                 Help
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/privacy"
-                className="block px-3 py-2 rounded-lg text-sancta-maroon font-medium hover:bg-sancta-maroon/10"
-              >
-                Privacy Notice
               </Link>
             </li>
           </ul>
@@ -535,9 +539,6 @@ export default function AuthenticatedLayout({
             <HelpIcon className="w-4 h-4 shrink-0" />
             Help
           </Link>
-          <Link href="/privacy" prefetch={false} className="text-sm text-sancta-maroon hover:underline">
-            Privacy Notice
-          </Link>
           <span className="text-sm text-gray-600">
             {user.displayName || user.username}
           </span>
@@ -552,6 +553,26 @@ export default function AuthenticatedLayout({
         <main className="flex-1 p-4 md:p-6 w-full min-w-0">
           {children}
         </main>
+        <footer
+          className="mt-auto w-full min-w-0 border-t border-gray-100 bg-gray-50/90 px-4 py-4 md:px-6 md:py-5"
+          role="contentinfo"
+        >
+          <p className="text-xs font-bold uppercase tracking-wide text-gray-800">Trust &amp; Legal</p>
+          <p className="mt-1.5 text-xs text-gray-600 leading-snug">
+            Learn how your data is handled and protected.
+          </p>
+          <nav aria-label="Trust and legal" className="mt-2.5 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            <Link href="/data-protection" prefetch={false} className={trustLegalFooterLinkClass}>
+              Data Protection &amp; Trust
+            </Link>
+            <Link href="/privacy" prefetch={false} className={trustLegalFooterLinkClass}>
+              Privacy
+            </Link>
+            <Link href="/terms-of-use" prefetch={false} className={trustLegalFooterLinkClass}>
+              Terms
+            </Link>
+          </nav>
+        </footer>
       </div>
     </div>
   );

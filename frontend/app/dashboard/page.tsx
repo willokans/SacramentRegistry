@@ -218,7 +218,7 @@ export default function DashboardPage() {
 
   return (
     <AuthenticatedLayout>
-      <div className="space-y-6">
+      <div className="space-y-4">
         {/* Welcome + Year */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -257,10 +257,15 @@ export default function DashboardPage() {
               {SACRAMENT_CARD_CONFIG.map(({ icon, title, countKey, path, ctaLabel, guidance, buttonClass }) => {
                 const count = counts[countKey];
                 const href = `${path}?parishId=${parishId}`;
+                const isPrimaryKpi = countKey === 'baptisms';
                 return (
                   <div
                     key={countKey}
-                    className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+                    className={
+                      isPrimaryKpi
+                        ? 'rounded-xl border border-sancta-maroon/35 bg-white p-4 shadow-md ring-1 ring-sancta-maroon/15'
+                        : 'rounded-xl border border-gray-200 bg-white p-4 shadow-sm'
+                    }
                   >
                     <div className="flex items-center gap-2 text-gray-600">
                       <span className="text-2xl" aria-hidden>
@@ -287,41 +292,41 @@ export default function DashboardPage() {
               })}
             </div>
 
-            {/* Quick Actions */}
+            {/* Quick Actions — single primary CTA; other registrations are secondary */}
             <div>
-              <h2 className="text-lg font-semibold text-gray-800 mb-3">Quick Actions</h2>
-              <div className="flex flex-wrap gap-3">
+              <h2 className="text-lg font-semibold text-gray-800 mb-2">Quick Actions</h2>
+              <div className="flex flex-wrap gap-2">
                 <Link
                   href={`/baptisms/new?parishId=${parishId}`}
-                  className="inline-flex items-center gap-2 rounded-lg bg-sancta-maroon px-4 py-3 text-white font-medium hover:bg-sancta-maroon-dark min-h-[44px]"
+                  className="inline-flex items-center gap-2 rounded-lg bg-sancta-maroon px-4 py-3 text-white font-medium shadow-sm hover:bg-sancta-maroon-dark min-h-[44px]"
                 >
                   <span aria-hidden>💧</span>
                   Register Baptism
                 </Link>
                 <Link
                   href={`/communions/new?parishId=${parishId}`}
-                  className="inline-flex items-center gap-2 rounded-lg bg-purple-700 px-4 py-3 text-white font-medium hover:bg-purple-800 min-h-[44px]"
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 hover:border-gray-400 hover:bg-gray-50 min-h-[44px]"
                 >
                   <span aria-hidden>🍞</span>
                   Register Holy Communion
                 </Link>
                 <Link
                   href={`/confirmations/new?parishId=${parishId}`}
-                  className="inline-flex items-center gap-2 rounded-lg bg-indigo-700 px-4 py-3 text-white font-medium hover:bg-indigo-800 min-h-[44px]"
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 hover:border-gray-400 hover:bg-gray-50 min-h-[44px]"
                 >
                   <span aria-hidden>✝</span>
                   Register Confirmation
                 </Link>
                 <Link
                   href={`/marriages/new?parishId=${parishId}`}
-                  className="inline-flex items-center gap-2 rounded-lg bg-amber-700 px-4 py-3 text-white font-medium hover:bg-amber-800 min-h-[44px]"
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 hover:border-gray-400 hover:bg-gray-50 min-h-[44px]"
                 >
                   <span aria-hidden>💍</span>
                   Register Marriage
                 </Link>
                 <Link
                   href="/baptisms"
-                  className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-700 font-medium hover:bg-gray-50 min-h-[44px]"
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 hover:border-gray-400 hover:bg-gray-50 min-h-[44px]"
                 >
                   Sacramental Register
                 </Link>
@@ -331,7 +336,7 @@ export default function DashboardPage() {
             {/* Sacraments overview grouped (clustered) bar chart */}
             <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
               <h2 className="text-lg font-semibold text-gray-800 mb-1">Sacraments overview by month</h2>
-              <p className="text-xs text-gray-500 mb-3">All records grouped by month of creation</p>
+              <p className="text-xs text-gray-500 mb-2">All records grouped by month of creation</p>
               <div className="w-full overflow-x-auto pb-1">
                 <div className="flex items-end gap-2 h-56 w-full min-w-0 border-b border-gray-100">
                   {monthNames.map((name, i) => (
@@ -380,9 +385,9 @@ export default function DashboardPage() {
             </section>
 
             {/* Sacraments overview + Recent Activity */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                <h2 className="text-lg font-semibold text-gray-800 mb-3">Latest sacramental register entries</h2>
+                <h2 className="text-lg font-semibold text-gray-800 mb-2">Latest sacramental register entries</h2>
                 {recent.length === 0 ? (
                   <p className="text-sm text-gray-500">No recent records yet.</p>
                 ) : (
@@ -403,8 +408,8 @@ export default function DashboardPage() {
                 )}
               </section>
               <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-lg font-semibold text-gray-800">Internal Records Activity</h2>
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-lg font-semibold text-gray-800">Recent Activity</h2>
                   <Link href="/baptisms" className="text-sm text-sancta-maroon hover:underline">
                     View all
                   </Link>
