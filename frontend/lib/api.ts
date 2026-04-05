@@ -42,7 +42,37 @@ export async function login(username: string, password: string) {
 const TOKEN_STORAGE_KEY = 'church_registry_token';
 const REFRESH_TOKEN_STORAGE_KEY = 'church_registry_refresh_token';
 const USER_STORAGE_KEY = 'church_registry_user';
+/** Updated on user interaction and on explicit login — not on silent JWT refresh. */
+const AUTH_LAST_ACTIVITY_KEY = 'church_registry_last_activity_ms';
 let refreshInFlight: Promise<boolean> | null = null;
+
+function persistAuthCredentials(
+  token: string,
+  refreshToken: string,
+  user: { username: string; displayName: string | null; role: string | null },
+) {
+  localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refreshToken);
+  localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+}
+
+/** Call when the user does something in the app (also called from login via storeAuth). */
+export function touchAuthActivity(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(AUTH_LAST_ACTIVITY_KEY, String(Date.now()));
+  } catch {
+    // private mode / quota
+  }
+}
+
+export function readAuthLastActivityMs(): number | null {
+  if (typeof window === 'undefined') return null;
+  const raw = localStorage.getItem(AUTH_LAST_ACTIVITY_KEY);
+  if (raw == null) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
 
 export function getStoredToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -61,15 +91,15 @@ export function getStoredUser(): { username: string; displayName: string | null;
 }
 
 export function storeAuth(token: string, refreshToken: string, user: { username: string; displayName: string | null; role: string | null }) {
-  localStorage.setItem(TOKEN_STORAGE_KEY, token);
-  localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refreshToken);
-  localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+  persistAuthCredentials(token, refreshToken, user);
+  touchAuthActivity();
 }
 
 export function clearAuth() {
   localStorage.removeItem(TOKEN_STORAGE_KEY);
   localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
   localStorage.removeItem(USER_STORAGE_KEY);
+  localStorage.removeItem(AUTH_LAST_ACTIVITY_KEY);
 }
 
 /** Request password reset by email or username. Returns token (MVP: no email sent; share token with user). Uses Next.js proxy to avoid CORS. */
@@ -294,7 +324,7 @@ async function ensureFreshAccessToken(): Promise<boolean> {
         displayName: payload.displayName ?? fallbackUser?.displayName ?? null,
         role: payload.role ?? fallbackUser?.role ?? null,
       };
-      storeAuth(payload.token, payload.refreshToken, nextUser);
+      persistAuthCredentials(payload.token, payload.refreshToken, nextUser);
       return true;
     } catch {
       clearAuth();
