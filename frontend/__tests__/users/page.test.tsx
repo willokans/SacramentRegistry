@@ -10,10 +10,11 @@ import userEvent from '@testing-library/user-event';
 import { useRouter, usePathname } from 'next/navigation';
 import UsersPage from '@/app/users/page';
 import {
-  listUsersWithParishAccess,
-  fetchDioceses,
-  fetchParishes,
+  searchUsersWithParishAccess,
+  fetchDiocesesWithParishes,
   replaceUserParishAccess,
+  getLatestUserInvitation,
+  resendUserInvitation,
 } from '@/lib/api';
 import { getStoredToken, getStoredUser } from '@/lib/api';
 import { useParish } from '@/context/ParishContext';
@@ -27,10 +28,11 @@ jest.mock('next/navigation', () => ({
 jest.mock('@/lib/api', () => ({
   getStoredToken: jest.fn(),
   getStoredUser: jest.fn(),
-  listUsersWithParishAccess: jest.fn(),
-  fetchDioceses: jest.fn(),
-  fetchParishes: jest.fn(),
+  searchUsersWithParishAccess: jest.fn(),
+  fetchDiocesesWithParishes: jest.fn(),
   replaceUserParishAccess: jest.fn(),
+  getLatestUserInvitation: jest.fn(),
+  resendUserInvitation: jest.fn(),
 }));
 
 jest.mock('@/context/ParishContext', () => ({
@@ -61,11 +63,11 @@ const mockUsers = [
   },
 ];
 
-const mockDioceses = [{ id: 1, name: 'Lagos' }];
 const mockParishes = [
   { id: 10, parishName: 'St Mary', dioceseId: 1 },
   { id: 11, parishName: 'St John', dioceseId: 1 },
 ];
+const mockDiocesesWithParishes = [{ id: 1, dioceseName: 'Lagos', parishes: mockParishes }];
 
 describe('Users page (User Access)', () => {
   beforeEach(() => {
@@ -81,25 +83,35 @@ describe('Users page (User Access)', () => {
       ...defaultParishContext,
       parishes: mockParishes,
     });
-    (listUsersWithParishAccess as jest.Mock).mockResolvedValue(mockUsers);
-    (fetchDioceses as jest.Mock).mockResolvedValue(mockDioceses);
-    (fetchParishes as jest.Mock).mockResolvedValue(mockParishes);
+    (searchUsersWithParishAccess as jest.Mock).mockResolvedValue({
+      content: mockUsers,
+      totalElements: mockUsers.length,
+      totalPages: 1,
+      size: 20,
+      number: 0,
+      first: true,
+      last: true,
+      numberOfElements: mockUsers.length,
+      empty: false,
+    });
+    (fetchDiocesesWithParishes as jest.Mock).mockResolvedValue(mockDiocesesWithParishes);
     (replaceUserParishAccess as jest.Mock).mockClear();
+    (getLatestUserInvitation as jest.Mock).mockResolvedValue(null);
+    (resendUserInvitation as jest.Mock).mockClear();
   });
 
-  it('fetches users and dioceses on load', async () => {
+  it('fetches users and dioceses/parishes on load', async () => {
     render(<UsersPage />);
     await waitFor(() => {
-      expect(listUsersWithParishAccess).toHaveBeenCalled();
-      expect(fetchDioceses).toHaveBeenCalled();
+      expect(searchUsersWithParishAccess).toHaveBeenCalledWith('', 0, 20);
+      expect(fetchDiocesesWithParishes).toHaveBeenCalled();
     });
-    expect(fetchParishes).toHaveBeenCalledWith(1);
   });
 
   it('shows User Parish Access heading and description', async () => {
     render(<UsersPage />);
     await waitFor(() => {
-      expect(listUsersWithParishAccess).toHaveBeenCalled();
+      expect(searchUsersWithParishAccess).toHaveBeenCalled();
     });
     expect(screen.getByRole('heading', { name: /user parish access/i })).toBeInTheDocument();
     expect(screen.getByText(/assign or revoke parish access/i)).toBeInTheDocument();
@@ -135,6 +147,43 @@ describe('Users page (User Access)', () => {
     expect(screen.getAllByText(/priest@church\.com/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Default parish')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /save parish access/i })).toBeInTheDocument();
+  });
+
+  it('allows resending latest invitation from users page', async () => {
+    (getLatestUserInvitation as jest.Mock).mockResolvedValue({
+      invitationId: 44,
+      userId: 2,
+      invitedEmail: 'priest@church.com',
+      expiresAt: new Date().toISOString(),
+      invitationStatus: 'PENDING',
+      emailDeliveryStatus: 'FAILED',
+      deliveryMessage: 'Invitation created, but email delivery failed. Please use resend to try again.',
+      lastEmailError: 'Authentication failed',
+    });
+    (resendUserInvitation as jest.Mock).mockResolvedValue({
+      invitationId: 45,
+      userId: 2,
+      invitedEmail: 'priest@church.com',
+      expiresAt: new Date().toISOString(),
+      invitationStatus: 'PENDING',
+      emailDeliveryStatus: 'SENT',
+      deliveryMessage: 'Invitation email sent.',
+      lastEmailError: null,
+    });
+
+    render(<UsersPage />);
+    await waitFor(() => {
+      expect(screen.getByText('Fr. John')).toBeInTheDocument();
+    });
+    await userEvent.click(screen.getByRole('button', { name: /fr\. john/i }));
+    await waitFor(() => {
+      expect(getLatestUserInvitation).toHaveBeenCalledWith(2);
+    });
+    await userEvent.click(screen.getByRole('button', { name: /resend invitation email/i }));
+    await waitFor(() => {
+      expect(resendUserInvitation).toHaveBeenCalledWith(44);
+    });
+    expect(screen.getByText(/delivery: SENT/i)).toBeInTheDocument();
   });
 
   it('shows parish checkboxes grouped by diocese', async () => {
@@ -186,7 +235,7 @@ describe('Users page (User Access)', () => {
   });
 
   it('shows error when fetch fails', async () => {
-    (listUsersWithParishAccess as jest.Mock).mockRejectedValue(new Error('Admin access required'));
+    (searchUsersWithParishAccess as jest.Mock).mockRejectedValue(new Error('Admin access required'));
     render(<UsersPage />);
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent(/admin access required|failed to load/i);
@@ -194,7 +243,17 @@ describe('Users page (User Access)', () => {
   });
 
   it('shows "No users found" when list is empty', async () => {
-    (listUsersWithParishAccess as jest.Mock).mockResolvedValue([]);
+    (searchUsersWithParishAccess as jest.Mock).mockResolvedValue({
+      content: [],
+      totalElements: 0,
+      totalPages: 1,
+      size: 20,
+      number: 0,
+      first: true,
+      last: true,
+      numberOfElements: 0,
+      empty: true,
+    });
     render(<UsersPage />);
     await waitFor(() => {
       expect(screen.getByText('No users found.')).toBeInTheDocument();
@@ -211,8 +270,8 @@ describe('Users page (User Access)', () => {
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: /user parish access/i })).toBeInTheDocument();
     });
-    expect(listUsersWithParishAccess).toHaveBeenCalled();
-    expect(fetchDioceses).toHaveBeenCalled();
+    expect(searchUsersWithParishAccess).toHaveBeenCalled();
+    expect(fetchDiocesesWithParishes).toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
   });
 

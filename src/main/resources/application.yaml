@@ -3,6 +3,18 @@ server:
     include-message: always
 
 spring:
+  mail:
+    host: ${SMTP_HOST:mail.privateemail.com}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SMTP_AUTH:true}
+          starttls:
+            enable: ${SMTP_STARTTLS_ENABLE:true}
+            required: ${SMTP_STARTTLS_REQUIRED:true}
   data:
     web:
       pageable:
@@ -42,10 +54,18 @@ app:
   refresh-token:
     # Cron for expired refresh token cleanup (default: hourly at minute 0)
     cleanup-cron: ${REFRESH_TOKEN_CLEANUP_CRON:0 0 * * * ?}
+  invitation:
+    accept-base-url: ${APP_INVITATION_ACCEPT_BASE_URL:http://localhost:3000/accept-invite}
+    email:
+      from: ${APP_INVITATION_EMAIL_FROM:onboarding@sacramentregistry.com}
+      allowed-domain: ${APP_INVITATION_EMAIL_ALLOWED_DOMAIN:sacramentregistry.com}
+  user-invitation:
+    resend-cooldown-ms: ${APP_USER_INVITATION_RESEND_COOLDOWN_MS:900000}
+    expose-token-in-response: ${APP_USER_INVITATION_EXPOSE_TOKEN_IN_RESPONSE:false}
   rate-limit:
     login:
       limit: 5
-      period-minutes: 1
+      period-minutes: 15
     refresh:
       limit: 15
       period-minutes: 1

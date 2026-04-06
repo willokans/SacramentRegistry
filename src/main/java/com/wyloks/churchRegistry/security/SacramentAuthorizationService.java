@@ -5,6 +5,7 @@ import com.wyloks.churchRegistry.repository.ConfirmationRepository;
 import com.wyloks.churchRegistry.repository.FirstHolyCommunionRepository;
 import com.wyloks.churchRegistry.repository.HolyOrderRepository;
 import com.wyloks.churchRegistry.repository.MarriageRepository;
+import com.wyloks.churchRegistry.repository.ParishRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -19,10 +20,14 @@ import java.util.Set;
 /**
  * Final authorization guard for sacrament read/write operations.
  * Scope is derived from app_user_parish_access (assignment flow); parish_id is optional default.
+ * Rows that exist but have no parish link cannot be accessed by non–{@code SUPER_ADMIN} users (deny-by-default).
  */
 @Component
 @RequiredArgsConstructor
 public class SacramentAuthorizationService {
+
+    private static final String NO_PARISH_READ = "Sacrament has no parish assignment; access denied";
+    private static final String NO_PARISH_WRITE = "Sacrament has no parish assignment; write denied";
 
     private static final Set<String> WRITE_ROLES = Set.of("ADMIN", "PRIEST", "PARISH_PRIEST", "PARISH_SECRETARY");
 
@@ -31,10 +36,11 @@ public class SacramentAuthorizationService {
     private final ConfirmationRepository confirmationRepository;
     private final MarriageRepository marriageRepository;
     private final HolyOrderRepository holyOrderRepository;
+    private final ParishRepository parishRepository;
 
     public void requireParishAccess(Long parishId) {
         CurrentUser user = currentUser();
-        if (user.isAdmin()) {
+        if (user.isSuperAdmin()) {
             return;
         }
         if (user.parishIds().isEmpty()) {
@@ -46,24 +52,37 @@ public class SacramentAuthorizationService {
     }
 
     /**
-     * Ensures the current user can access diocese-level data (e.g. diocesan dashboard).
-     * ADMIN and SUPER_ADMIN can access any diocese; other roles are denied.
-     * Future: DIOCESE_ADMIN would be restricted to their assigned diocese.
+     * Ensures the current user can access diocese-level entry points (e.g. diocesan dashboard, directory).
+     * Product policy (Option B): {@code SUPER_ADMIN} may access any diocese; {@code ADMIN} only if assigned to at least
+     * one parish in that diocese. Aggregates and lists for {@code ADMIN} are then limited to assigned parishes in that
+     * diocese (never the whole diocese).
      */
     public void requireDioceseAccess(Long dioceseId) {
         CurrentUser user = currentUser();
-        if (!user.isAdmin()) {
+        if (!user.isParishAdminOrSuper()) {
             throw forbidden("Diocese access denied. Only ADMIN and SUPER_ADMIN can access the diocesan dashboard.");
         }
         if (dioceseId == null) {
             throw forbidden("Diocese ID is required");
         }
+        if (user.isSuperAdmin()) {
+            return;
+        }
+        if (user.parishIds().isEmpty()) {
+            throw forbidden("Diocese access denied. No parish assigned.");
+        }
+        if (parishRepository.findByIdInAndDioceseId(user.parishIds(), dioceseId).isEmpty()) {
+            throw forbidden("Diocese access denied. No assigned parish in this diocese.");
+        }
     }
 
-    /** Parish policy settings (e.g. marriage sacrament requirements): only ADMIN and SUPER_ADMIN may change. */
+    /**
+     * Parish policy settings (e.g. marriage sacrament requirements): {@code ADMIN} or {@code SUPER_ADMIN},
+     * with parish scope enforced separately (e.g. {@link #requireParishAccess(Long)}).
+     */
     public void requireAdminRole() {
         CurrentUser user = currentUser();
-        if (!user.isAdmin()) {
+        if (!user.isParishAdminOrSuper()) {
             throw forbidden("Only ADMIN and SUPER_ADMIN may perform this action");
         }
     }
@@ -73,13 +92,14 @@ public class SacramentAuthorizationService {
         if (!WRITE_ROLES.contains(user.role())) {
             throw forbidden("Insufficient role for sacrament write access");
         }
-        if (!user.isAdmin()) {
-            if (user.parishIds().isEmpty()) {
-                throw forbidden("No parish assigned. Contact admin.");
-            }
-            if (parishId == null || !user.parishIds().contains(parishId)) {
-                throw forbidden("Cross-parish write denied");
-            }
+        if (user.isSuperAdmin()) {
+            return;
+        }
+        if (user.parishIds().isEmpty()) {
+            throw forbidden("No parish assigned. Contact admin.");
+        }
+        if (parishId == null || !user.parishIds().contains(parishId)) {
+            throw forbidden("Cross-parish write denied");
         }
     }
 
@@ -119,6 +139,196 @@ public class SacramentAuthorizationService {
         return baptismRepository.findParishIdById(baptismId);
     }
 
+    /**
+     * Read access for a baptism row. {@code false} means no row — caller should respond with 404.
+     */
+    public boolean requireReadAccessForBaptism(Long baptismId) {
+        if (!baptismRepository.existsById(baptismId)) {
+            return false;
+        }
+        enforceReadAccessForResolvedParish(baptismRepository.findParishIdById(baptismId));
+        return true;
+    }
+
+    /**
+     * Write access for a baptism row. {@code false} means no row — caller should respond with 404.
+     */
+    public boolean requireWriteAccessForBaptism(Long baptismId) {
+        if (!baptismRepository.existsById(baptismId)) {
+            return false;
+        }
+        enforceWriteAccessForResolvedParish(baptismRepository.findParishIdById(baptismId));
+        return true;
+    }
+
+    public boolean requireReadAccessForCommunion(Long communionId) {
+        if (!communionRepository.existsById(communionId)) {
+            return false;
+        }
+        enforceReadAccessForResolvedParish(communionRepository.findParishIdById(communionId));
+        return true;
+    }
+
+    public boolean requireWriteAccessForCommunion(Long communionId) {
+        if (!communionRepository.existsById(communionId)) {
+            return false;
+        }
+        enforceWriteAccessForResolvedParish(communionRepository.findParishIdById(communionId));
+        return true;
+    }
+
+    /**
+     * Read communion by baptism id (at most one). {@code false} if no communion for that baptism.
+     */
+    public boolean requireReadAccessForCommunionByBaptismId(Long baptismId) {
+        return communionRepository.findByBaptismId(baptismId)
+                .map(c -> {
+                    enforceReadAccessForResolvedParish(communionRepository.findParishIdById(c.getId()));
+                    return true;
+                })
+                .orElse(false);
+    }
+
+    public boolean requireReadAccessForConfirmation(Long confirmationId) {
+        if (!confirmationRepository.existsById(confirmationId)) {
+            return false;
+        }
+        enforceReadAccessForResolvedParish(confirmationRepository.findParishIdById(confirmationId));
+        return true;
+    }
+
+    public boolean requireWriteAccessForConfirmation(Long confirmationId) {
+        if (!confirmationRepository.existsById(confirmationId)) {
+            return false;
+        }
+        enforceWriteAccessForResolvedParish(confirmationRepository.findParishIdById(confirmationId));
+        return true;
+    }
+
+    public boolean requireReadAccessForConfirmationByCommunionId(Long communionId) {
+        return confirmationRepository.findByFirstHolyCommunionId(communionId)
+                .map(c -> {
+                    enforceReadAccessForResolvedParish(confirmationRepository.findParishIdById(c.getId()));
+                    return true;
+                })
+                .orElse(false);
+    }
+
+    public boolean requireReadAccessForMarriage(Long marriageId) {
+        if (!marriageRepository.existsById(marriageId)) {
+            return false;
+        }
+        enforceReadAccessForResolvedParish(marriageRepository.findParishIdById(marriageId));
+        return true;
+    }
+
+    public boolean requireWriteAccessForMarriage(Long marriageId) {
+        if (!marriageRepository.existsById(marriageId)) {
+            return false;
+        }
+        enforceWriteAccessForResolvedParish(marriageRepository.findParishIdById(marriageId));
+        return true;
+    }
+
+    public boolean requireReadAccessForMarriageByConfirmationId(Long confirmationId) {
+        return marriageRepository.findByConfirmationId(confirmationId)
+                .map(m -> {
+                    enforceReadAccessForResolvedParish(marriageRepository.findParishIdById(m.getId()));
+                    return true;
+                })
+                .orElse(false);
+    }
+
+    public boolean requireReadAccessForMarriageByBaptismId(Long baptismId) {
+        return marriageRepository.findByBaptismId(baptismId)
+                .map(m -> {
+                    enforceReadAccessForResolvedParish(marriageRepository.findParishIdById(m.getId()));
+                    return true;
+                })
+                .orElse(false);
+    }
+
+    public boolean requireReadAccessForHolyOrder(Long holyOrderId) {
+        if (!holyOrderRepository.existsById(holyOrderId)) {
+            return false;
+        }
+        enforceReadAccessForResolvedParish(holyOrderRepository.findParishIdById(holyOrderId));
+        return true;
+    }
+
+    /**
+     * For POST /communions: baptism must exist with a parish (or {@code SUPER_ADMIN} may proceed only if parish is set).
+     */
+    public long requireBaptismForCommunionCreate(Long baptismId) {
+        if (!baptismRepository.existsById(baptismId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Baptism not found");
+        }
+        Optional<Long> parishId = baptismRepository.findParishIdById(baptismId);
+        enforceWriteAccessForResolvedParish(parishId);
+        return parishId.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Baptism has no parish"));
+    }
+
+    /**
+     * For POST /marriages: confirmation must exist; parish comes from confirmation (marriage row may not exist yet).
+     */
+    public long requireConfirmationForMarriageCreate(Long confirmationId) {
+        if (!confirmationRepository.existsById(confirmationId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Confirmation not found");
+        }
+        Optional<Long> parishId = confirmationRepository.findParishIdById(confirmationId);
+        enforceWriteAccessForResolvedParish(parishId);
+        return parishId.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Confirmation has no parish"));
+    }
+
+    /**
+     * Validates write access using an existing confirmation's parish chain (e.g. marriage-with-parties when linking parties).
+     */
+    public long requireWriteAccessForExistingConfirmation(Long confirmationId) {
+        if (!confirmationRepository.existsById(confirmationId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Confirmation not found");
+        }
+        Optional<Long> parishId = confirmationRepository.findParishIdById(confirmationId);
+        enforceWriteAccessForResolvedParish(parishId);
+        return parishId.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Confirmation has no parish"));
+    }
+
+    /**
+     * For POST /confirmations: communion must exist and have a parish chain resolvable for write.
+     */
+    public long requireCommunionForConfirmationCreate(Long communionId) {
+        if (!communionRepository.existsById(communionId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Communion not found");
+        }
+        Optional<Long> parishId = communionRepository.findParishIdById(communionId);
+        enforceWriteAccessForResolvedParish(parishId);
+        return parishId.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Communion not found or has no parish"));
+    }
+
+    private void enforceReadAccessForResolvedParish(Optional<Long> parishIdOpt) {
+        CurrentUser user = currentUser();
+        if (user.isSuperAdmin()) {
+            return;
+        }
+        if (parishIdOpt == null || parishIdOpt.isEmpty()) {
+            throw forbidden(NO_PARISH_READ);
+        }
+        requireParishAccess(parishIdOpt.get());
+    }
+
+    private void enforceWriteAccessForResolvedParish(Optional<Long> parishIdOpt) {
+        CurrentUser user = currentUser();
+        if (user.isSuperAdmin()) {
+            return;
+        }
+        if (parishIdOpt == null || parishIdOpt.isEmpty()) {
+            throw forbidden(NO_PARISH_WRITE);
+        }
+        requireWriteAccessForParish(parishIdOpt.get());
+    }
+
     private CurrentUser currentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
@@ -150,7 +360,11 @@ public class SacramentAuthorizationService {
     }
 
     private record CurrentUser(String role, Set<Long> parishIds) {
-        boolean isAdmin() {
+        boolean isSuperAdmin() {
+            return "SUPER_ADMIN".equals(role);
+        }
+
+        boolean isParishAdminOrSuper() {
             return "ADMIN".equals(role) || "SUPER_ADMIN".equals(role);
         }
     }

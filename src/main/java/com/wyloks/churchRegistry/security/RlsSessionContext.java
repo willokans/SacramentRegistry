@@ -8,8 +8,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Holds RLS session values (parish_ids, is_admin) for the current request.
- * Used by RlsDataSourceDecorator to set PostgreSQL session variables for row-level security.
+ * Holds RLS session values for the current request: {@code app.parish_ids} and {@code app.is_admin}.
+ * {@link RlsValues#isAdmin()} is {@code true} only for {@code SUPER_ADMIN} (global RLS bypass).
+ * Parish-scoped {@code ADMIN} uses {@link RlsValues#parishIds()} only; {@code app.is_admin} stays false.
  */
 public final class RlsSessionContext {
 
@@ -19,6 +20,8 @@ public final class RlsSessionContext {
 
     /**
      * Set RLS values for the current request. Call from filter after authentication.
+     *
+     * @param isAdmin {@code true} only for SUPER_ADMIN; maps to PostgreSQL {@code app.is_admin}.
      */
     public static void set(Set<Long> parishIds, boolean isAdmin) {
         HOLDER.set(new RlsValues(parishIds, isAdmin));
@@ -48,12 +51,14 @@ public final class RlsSessionContext {
         if (auth == null || !auth.isAuthenticated() || !(auth.getPrincipal() instanceof AppUserDetails details)) {
             return new RlsValues(Collections.emptySet(), false);
         }
-        String role = details.getRole();
-        boolean isAdmin = role != null && ("ADMIN".equals(role.toUpperCase()) || "SUPER_ADMIN".equals(role.toUpperCase()));
+        boolean superAdminRlsBypass = details.isSuperAdmin();
         Set<Long> parishIds = details.getParishAccessIds();
-        return new RlsValues(parishIds != null ? parishIds : Collections.emptySet(), isAdmin);
+        return new RlsValues(parishIds != null ? parishIds : Collections.emptySet(), superAdminRlsBypass);
     }
 
+    /**
+     * @param isAdmin when {@code true}, PostgreSQL {@code app.is_admin} is set (SUPER_ADMIN global bypass only).
+     */
     public record RlsValues(Set<Long> parishIds, boolean isAdmin) {
         public String parishIdsAsCommaSeparated() {
             if (parishIds == null || parishIds.isEmpty()) {

@@ -76,6 +76,8 @@ class ParishControllerTest {
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.parishName").value("St Mary"))
                 .andExpect(jsonPath("$.requireMarriageConfirmation").value(true));
+
+        verify(sacramentAuthorizationService).requireParishAccess(1L);
     }
 
     @Test
@@ -84,6 +86,8 @@ class ParishControllerTest {
 
         mvc.perform(get("/api/parishes/999"))
                 .andExpect(status().isNotFound());
+
+        verify(sacramentAuthorizationService).requireParishAccess(999L);
     }
 
     @Test

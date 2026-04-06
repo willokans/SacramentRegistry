@@ -204,4 +204,11 @@ class ApiSecurityIntegrationTest {
                         .content("{\"token\":\"invalid-token\",\"newPassword\":\"newpass123\"}"))
                 .andExpect(status().isUnauthorized());
     }
+
+    @Test
+    void inviteProfile_withoutAuth_isPublicAndReturnsDomainError() throws Exception {
+        mvc.perform(get("/api/auth/invite-profile")
+                        .param("token", "invalid-token"))
+                .andExpect(status().isBadRequest());
+    }
 }

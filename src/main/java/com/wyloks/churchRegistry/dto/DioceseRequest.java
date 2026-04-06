@@ -22,4 +22,22 @@ public class DioceseRequest {
 
     @Size(max = 1000)
     private String description;
+
+    @Size(max = 2)
+    private String countryCode;
+
+    @Size(max = 100)
+    private String countryName;
+
+    @Size(max = 255)
+    private String ordinaryName;
+
+    @Size(max = 100)
+    private String ordinaryTitle;
+
+    public DioceseRequest(String dioceseName, String code, String description) {
+        this.dioceseName = dioceseName;
+        this.code = code;
+        this.description = description;
+    }
 }

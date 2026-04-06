@@ -213,3 +213,17 @@ databaseChangeLog:
       file: db/changelog/changes/019-seed-super-admin.yaml
   - include:
       file: db/changelog/changes/021-parish-require-marriage-confirmation.yaml
+  - include:
+      file: db/changelog/changes/022-birth-certificate-document-versioning.yaml
+  - include:
+      file: db/changelog/changes/023-user-invitation-and-org-uniqueness-guardrails.yaml
+  - include:
+      file: db/changelog/changes/024-user-invitation-acceptance-audit-metadata.yaml
+  - include:
+      file: db/changelog/changes/025-user-invitation-email-delivery-tracking.yaml
+  - include:
+      file: db/changelog/changes/026-diocese-country-and-ordinary-fields.yaml
+  - include:
+      file: db/changelog/changes/027-rls-app-is-admin-super-admin-only-doc.yaml
+  - include:
+      file: db/changelog/changes/028-admin-user-parish-access-backfill.yaml

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { login, storeAuth, setStoredParishId } from '@/lib/api';
 
@@ -49,11 +49,19 @@ function EyeOffIcon({ className }: { className?: string }) {
 }
 
 export default function LoginPage() {
+  const [inviteAccepted, setInviteAccepted] = useState(false);
+  const [idleSignedOut, setIdleSignedOut] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setInviteAccepted(params.get('inviteAccepted') === '1');
+    setIdleSignedOut(params.get('reason') === 'idle');
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -101,6 +109,18 @@ export default function LoginPage() {
           <h2 className="text-xl font-semibold text-sancta-maroon">Welcome back</h2>
           <p className="text-sm text-gray-600 mt-0.5">Sign in to continue your journey.</p>
         </div>
+
+        {inviteAccepted && (
+          <p role="status" className="mb-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+            Invitation accepted. You can now sign in with your username and password.
+          </p>
+        )}
+
+        {idleSignedOut && (
+          <p role="status" className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            You were signed out after two hours without activity. Please sign in again.
+          </p>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Username */}
@@ -184,6 +204,10 @@ export default function LoginPage() {
             <span className="mx-2 text-gray-300">·</span>
             <Link href="/privacy" className="text-sm text-sancta-maroon hover:underline focus:outline-none focus:ring-2 focus:ring-sancta-maroon/30 rounded">
               Privacy Notice
+            </Link>
+            <span className="mx-2 text-gray-300">·</span>
+            <Link href="/terms-of-use" className="text-sm text-sancta-maroon hover:underline focus:outline-none focus:ring-2 focus:ring-sancta-maroon/30 rounded">
+              Terms of Use
             </Link>
             <span className="mx-2 text-gray-300">·</span>
             <Link href="/login/forgot-password" className="text-sm text-sancta-maroon hover:underline focus:outline-none focus:ring-2 focus:ring-sancta-maroon/30 rounded">

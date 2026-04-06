@@ -32,7 +32,7 @@ class DioceseDashboardCacheIntegrationTest {
 
     @Test
     void getDioceseDashboard_populatesCache_andSecondCallHitsCache() throws Exception {
-        String token = loginAndGetToken("admin", "password");
+        String token = loginAndGetToken("superadmin", "password");
         long dioceseId = getOrCreateDioceseId(token);
 
         org.springframework.cache.Cache dashboardCache = cacheManager.getCache(CacheConfig.CACHE_DIOCESE_DASHBOARD);
@@ -65,7 +65,7 @@ class DioceseDashboardCacheIntegrationTest {
 
     @Test
     void getDioceseDashboard_differentDioceseIdsHaveSeparateCacheEntries() throws Exception {
-        String token = loginAndGetToken("admin", "password");
+        String token = loginAndGetToken("superadmin", "password");
         long dioceseId1 = getOrCreateDioceseId(token);
         long dioceseId2 = getOrCreateSecondDioceseId(token, dioceseId1);
 

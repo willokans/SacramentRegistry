@@ -3,6 +3,10 @@
  */
 import {
   createCommunionWithExternalBaptismPendingProof,
+  createDiocese,
+  fetchDioceses,
+  fetchInviteProfile,
+  fetchDashboardCounts,
   fetchDioceseDashboard,
   getStoredDioceseId,
   setStoredDioceseId,
@@ -120,6 +124,131 @@ describe('fetchDioceseDashboard', () => {
 
     await expect(fetchDioceseDashboard(1)).rejects.toThrow('Failed to fetch diocese dashboard');
   });
+
+  it('refreshes access token once on 401 and retries request', async () => {
+    const mockFetch = jest.fn()
+      .mockResolvedValueOnce({ ok: false, status: 401 })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            token: 'jwt-refreshed',
+            refreshToken: 'refresh-refreshed',
+            username: 'admin',
+            displayName: 'Admin',
+            role: 'ADMIN',
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockDioceseDashboard),
+      });
+    global.fetch = mockFetch;
+    localStorage.setItem('church_registry_refresh_token', 'refresh-original');
+    localStorage.setItem(
+      'church_registry_user',
+      JSON.stringify({ username: 'admin', displayName: 'Admin', role: 'ADMIN' }),
+    );
+
+    const result = await fetchDioceseDashboard(1);
+
+    expect(result).toEqual(mockDioceseDashboard);
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:8080/api/auth/refresh',
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    );
+    expect(localStorage.getItem('church_registry_token')).toBe('jwt-refreshed');
+    expect(localStorage.getItem('church_registry_refresh_token')).toBe('refresh-refreshed');
+  });
+
+  it('clears auth and throws Unauthorized when refresh fails', async () => {
+    const mockFetch = jest.fn()
+      .mockResolvedValueOnce({ ok: false, status: 401 })
+      .mockResolvedValueOnce({ ok: false, status: 401 });
+    global.fetch = mockFetch;
+    localStorage.setItem('church_registry_refresh_token', 'refresh-original');
+    localStorage.setItem(
+      'church_registry_user',
+      JSON.stringify({ username: 'admin', displayName: 'Admin', role: 'ADMIN' }),
+    );
+
+    await expect(fetchDioceseDashboard(1)).rejects.toThrow('Unauthorized');
+    expect(localStorage.getItem('church_registry_token')).toBeNull();
+    expect(localStorage.getItem('church_registry_refresh_token')).toBeNull();
+    expect(localStorage.getItem('church_registry_user')).toBeNull();
+  });
+
+  it('uses single-flight refresh when multiple requests get 401 concurrently', async () => {
+    const delayedRefresh = new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              token: 'jwt-refreshed',
+              refreshToken: 'refresh-refreshed',
+              username: 'admin',
+              displayName: 'Admin',
+              role: 'ADMIN',
+            }),
+        });
+      }, 10);
+    });
+
+    let dioceseAttempts = 0;
+    let parishAttempts = 0;
+    const mockFetch = jest.fn((url: string) => {
+      if (url.endsWith('/api/dioceses/1/dashboard')) {
+        dioceseAttempts += 1;
+        if (dioceseAttempts === 1) return Promise.resolve({ ok: false, status: 401 });
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockDioceseDashboard),
+        });
+      }
+      if (url.endsWith('/api/parishes/10/dashboard-counts')) {
+        parishAttempts += 1;
+        if (parishAttempts === 1) return Promise.resolve({ ok: false, status: 401 });
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              baptisms: 1,
+              communions: 2,
+              confirmations: 3,
+              marriages: 4,
+              holyOrders: 5,
+            }),
+        });
+      }
+      if (url.endsWith('/api/auth/refresh')) {
+        return delayedRefresh;
+      }
+      return Promise.resolve({ ok: false, status: 500 });
+    });
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    localStorage.setItem('church_registry_refresh_token', 'refresh-original');
+    localStorage.setItem(
+      'church_registry_user',
+      JSON.stringify({ username: 'admin', displayName: 'Admin', role: 'ADMIN' }),
+    );
+
+    const [dashboard, counts] = await Promise.all([
+      fetchDioceseDashboard(1),
+      fetchDashboardCounts(10),
+    ]);
+
+    expect(dashboard.counts.baptisms).toBe(150);
+    expect(counts.baptisms).toBe(1);
+    const refreshCalls = (mockFetch as jest.Mock).mock.calls.filter(
+      ([url]) => typeof url === 'string' && url.endsWith('/api/auth/refresh'),
+    );
+    expect(refreshCalls).toHaveLength(1);
+  });
 });
 
 describe('getStoredDioceseId / setStoredDioceseId', () => {
@@ -145,6 +274,38 @@ describe('getStoredDioceseId / setStoredDioceseId', () => {
   it('returns null for invalid stored value', () => {
     localStorage.setItem('church_registry_diocese_id', 'invalid');
     expect(getStoredDioceseId()).toBeNull();
+  });
+});
+
+describe('fetchInviteProfile', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it('calls invite-profile endpoint and maps prefill fields', async () => {
+    const mockFetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          title: 'Fr.',
+          firstName: 'John',
+          lastName: 'Doe',
+          invitedEmail: 'john@example.com',
+          expiresAt: '2026-04-12T10:00:00Z',
+        }),
+    });
+    global.fetch = mockFetch;
+
+    const response = await fetchInviteProfile('token-123');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:8080/api/auth/invite-profile?token=token-123',
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(response.firstName).toBe('John');
+    expect(response.lastName).toBe('Doe');
+    expect(response.title).toBe('Fr.');
   });
 });
 
@@ -234,5 +395,87 @@ describe('createCommunionWithExternalBaptismPendingProof', () => {
         externalBaptismPayload
       )
     ).rejects.toThrow('Parish is required for external baptism.');
+  });
+});
+
+describe('diocese API backward compatibility', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    localStorage.clear();
+    localStorage.setItem('church_registry_token', 'jwt-test');
+  });
+
+  it('fetchDioceses maps both legacy name and dioceseName fields', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve([
+        { id: 1, name: 'Legacy Diocese Name' },
+        { id: 2, dioceseName: 'Canonical Diocese Name', countryCode: 'NG', ordinaryName: 'John Doe' },
+      ]),
+    });
+
+    const dioceses = await fetchDioceses();
+
+    expect(dioceses).toEqual([
+      {
+        id: 1,
+        name: 'Legacy Diocese Name',
+        dioceseName: undefined,
+        countryCode: undefined,
+        countryName: undefined,
+        jurisdictionType: undefined,
+        ordinaryName: undefined,
+        ordinaryTitle: undefined,
+      },
+      {
+        id: 2,
+        name: 'Canonical Diocese Name',
+        dioceseName: 'Canonical Diocese Name',
+        countryCode: 'NG',
+        countryName: undefined,
+        jurisdictionType: undefined,
+        ordinaryName: 'John Doe',
+        ordinaryTitle: undefined,
+      },
+    ]);
+  });
+
+  it('createDiocese retries with legacy payload when extended payload is rejected', async () => {
+    const mockFetch = jest.fn()
+      .mockResolvedValueOnce({ ok: false, status: 400, text: () => Promise.resolve('Bad Request') })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ id: 12, dioceseName: 'Diocese of Abuja' }),
+      });
+    global.fetch = mockFetch;
+
+    const result = await createDiocese('Diocese of Abuja', {
+      countryCode: 'NG',
+      countryName: 'Nigeria',
+      ordinaryTitle: 'Most Rev.',
+    });
+
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:8080/api/dioceses',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          dioceseName: 'Diocese of Abuja',
+          countryCode: 'NG',
+          countryName: 'Nigeria',
+          ordinaryTitle: 'Most Rev.',
+        }),
+      }),
+    );
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:8080/api/dioceses',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ dioceseName: 'Diocese of Abuja' }),
+      }),
+    );
+    expect(result).toEqual({ id: 12, dioceseName: 'Diocese of Abuja' });
   });
 });

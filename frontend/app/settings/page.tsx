@@ -36,9 +36,9 @@ export default function SettingsHubPage() {
     <AuthenticatedLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-serif font-semibold text-sancta-maroon">Settings</h1>
+          <h1 className="text-2xl font-serif font-semibold text-sancta-maroon">Administration</h1>
           <p className="mt-1 text-sm text-gray-600">
-            Parish access, marriage requirements, and other admin-only options. Only <strong>ADMIN</strong> and{' '}
+            Directory management, parish access, marriage requirements, and other admin-only options. Only <strong>ADMIN</strong> and{' '}
             <strong>SUPER_ADMIN</strong> can open these. If you are a super admin, you will also see{' '}
             <strong>User Setup</strong> below to create new accounts.
           </p>
@@ -54,6 +54,13 @@ export default function SettingsHubPage() {
             <span className="mt-2 text-sm font-medium text-sancta-maroon">Open →</span>
           </Link>
           <div className="flex flex-col gap-6">
+            <Link href="/parishes" className={cardClass}>
+              <span className="font-semibold text-gray-900">Directory Management</span>
+              <span className="mt-1 block text-sm text-gray-600">
+                Manage dioceses and parishes for country-based setup and assignment.
+              </span>
+              <span className="mt-2 text-sm font-medium text-sancta-maroon">Open →</span>
+            </Link>
             <Link href="/users" className={cardClass}>
               <span className="font-semibold text-gray-900">User Access</span>
               <span className="mt-1 block text-sm text-gray-600">

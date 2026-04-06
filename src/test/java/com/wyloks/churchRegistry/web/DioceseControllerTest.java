@@ -21,6 +21,9 @@ import com.wyloks.churchRegistry.config.TestSecurityConfig;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -63,6 +66,38 @@ class DioceseControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void searchDioceses_returnsResultsScopedByCountry() throws Exception {
+        DioceseResponse response = new DioceseResponse(1L, "Archdiocese of Abuja", "ABJ", null);
+        when(dioceseService.searchByCountryAndQuery("NG", "abuja")).thenReturn(List.of(response));
+
+        mvc.perform(get("/api/dioceses/search")
+                        .param("countryCode", "NG")
+                        .param("q", "abuja"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(1))
+                .andExpect(jsonPath("$[0].dioceseName").value("Archdiocese of Abuja"));
+    }
+
+    @Test
+    void searchDioceses_allowsCountryOnlyRequest_withoutQuery() throws Exception {
+        DioceseResponse response = new DioceseResponse(2L, "Diocese of Lagos", "LAG", null);
+        when(dioceseService.searchByCountryAndQuery("NG", null)).thenReturn(List.of(response));
+
+        mvc.perform(get("/api/dioceses/search")
+                        .param("countryCode", "NG"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].dioceseName").value("Diocese of Lagos"));
+
+        verify(dioceseService).searchByCountryAndQuery(eq("NG"), isNull());
     }
 
     @Test

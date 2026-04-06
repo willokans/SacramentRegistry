@@ -7,7 +7,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import BaptismCreatePage from '@/app/baptisms/new/page';
-import { getStoredToken, getStoredUser, createBaptism } from '@/lib/api';
+import { getStoredToken, getStoredUser, createBaptism, uploadBaptismBirthCertificate } from '@/lib/api';
 
 jest.mock('next/navigation', () => ({
   useRouter: jest.fn(),
@@ -19,6 +19,7 @@ jest.mock('@/lib/api', () => ({
   getStoredToken: jest.fn(),
   getStoredUser: jest.fn(),
   createBaptism: jest.fn(),
+  uploadBaptismBirthCertificate: jest.fn(),
 }));
 
 jest.mock('@/context/ParishContext', () => ({
@@ -80,6 +81,7 @@ describe('Baptism create page', () => {
     });
     (useSearchParams as jest.Mock).mockReturnValue(new URLSearchParams('parishId=10'));
     (createBaptism as jest.Mock).mockResolvedValue({ id: 99, baptismName: 'Jane', surname: 'Doe' });
+    (uploadBaptismBirthCertificate as jest.Mock).mockResolvedValue(undefined);
   });
 
   it('shows form with heading and required fields', () => {
@@ -439,5 +441,54 @@ describe('Baptism create page', () => {
         }),
       );
     });
+  });
+
+  it('creates baptism first, then uploads optional birth certificate', async () => {
+    (createBaptism as jest.Mock).mockClear();
+    (uploadBaptismBirthCertificate as jest.Mock).mockClear();
+    const user = userEvent.setup();
+    render(<BaptismCreatePage />);
+
+    await fillRequiredFieldsForSubmit(user, {
+      addressLine: '10 Main St',
+      country: 'Nigeria',
+      region: 'Lagos',
+    });
+    const file = new File(['dummy-pdf'], 'birth-cert.pdf', { type: 'application/pdf' });
+    await user.upload(screen.getByLabelText(/birth certificate \(optional\)/i), file);
+    await user.click(screen.getByRole('button', { name: /save baptism/i }));
+
+    await waitFor(() => {
+      expect(createBaptism).toHaveBeenCalled();
+      expect(uploadBaptismBirthCertificate).toHaveBeenCalledWith(99, file);
+      expect(mockPush).toHaveBeenCalledWith('/baptisms');
+    });
+  });
+
+  it('keeps created baptism when optional birth certificate upload fails', async () => {
+    (createBaptism as jest.Mock).mockClear();
+    (uploadBaptismBirthCertificate as jest.Mock).mockClear();
+    const user = userEvent.setup();
+    (uploadBaptismBirthCertificate as jest.Mock).mockRejectedValueOnce(new Error('Upload failed'));
+    render(<BaptismCreatePage />);
+
+    await fillRequiredFieldsForSubmit(user, {
+      addressLine: '10 Main St',
+      country: 'Nigeria',
+      region: 'Lagos',
+    });
+    const file = new File(['dummy-pdf'], 'birth-cert.pdf', { type: 'application/pdf' });
+    await user.upload(screen.getByLabelText(/birth certificate \(optional\)/i), file);
+    await user.click(screen.getByRole('button', { name: /save baptism/i }));
+
+    await waitFor(() => {
+      expect(createBaptism).toHaveBeenCalled();
+      expect(uploadBaptismBirthCertificate).toHaveBeenCalledWith(99, file);
+    });
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(/baptism was created, but birth certificate upload failed/i)
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /baptism details/i })).toHaveAttribute('href', '/baptisms/99');
   });
 });

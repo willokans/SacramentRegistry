@@ -39,14 +39,49 @@ export async function login(username: string, password: string) {
   return res.json();
 }
 
+const TOKEN_STORAGE_KEY = 'church_registry_token';
+const REFRESH_TOKEN_STORAGE_KEY = 'church_registry_refresh_token';
+const USER_STORAGE_KEY = 'church_registry_user';
+/** Updated on user interaction and on explicit login — not on silent JWT refresh. */
+const AUTH_LAST_ACTIVITY_KEY = 'church_registry_last_activity_ms';
+let refreshInFlight: Promise<boolean> | null = null;
+
+function persistAuthCredentials(
+  token: string,
+  refreshToken: string,
+  user: { username: string; displayName: string | null; role: string | null },
+) {
+  localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refreshToken);
+  localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+}
+
+/** Call when the user does something in the app (also called from login via storeAuth). */
+export function touchAuthActivity(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(AUTH_LAST_ACTIVITY_KEY, String(Date.now()));
+  } catch {
+    // private mode / quota
+  }
+}
+
+export function readAuthLastActivityMs(): number | null {
+  if (typeof window === 'undefined') return null;
+  const raw = localStorage.getItem(AUTH_LAST_ACTIVITY_KEY);
+  if (raw == null) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
 export function getStoredToken(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('church_registry_token');
+  return localStorage.getItem(TOKEN_STORAGE_KEY);
 }
 
 export function getStoredUser(): { username: string; displayName: string | null; role: string | null } | null {
   if (typeof window === 'undefined') return null;
-  const raw = localStorage.getItem('church_registry_user');
+  const raw = localStorage.getItem(USER_STORAGE_KEY);
   if (!raw) return null;
   try {
     return JSON.parse(raw);
@@ -56,15 +91,15 @@ export function getStoredUser(): { username: string; displayName: string | null;
 }
 
 export function storeAuth(token: string, refreshToken: string, user: { username: string; displayName: string | null; role: string | null }) {
-  localStorage.setItem('church_registry_token', token);
-  localStorage.setItem('church_registry_refresh_token', refreshToken);
-  localStorage.setItem('church_registry_user', JSON.stringify(user));
+  persistAuthCredentials(token, refreshToken, user);
+  touchAuthActivity();
 }
 
 export function clearAuth() {
-  localStorage.removeItem('church_registry_token');
-  localStorage.removeItem('church_registry_refresh_token');
-  localStorage.removeItem('church_registry_user');
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+  localStorage.removeItem(USER_STORAGE_KEY);
+  localStorage.removeItem(AUTH_LAST_ACTIVITY_KEY);
 }
 
 /** Request password reset by email or username. Returns token (MVP: no email sent; share token with user). Uses Next.js proxy to avoid CORS. */
@@ -91,6 +126,65 @@ export async function resetPasswordByToken(token: string, newPassword: string): 
   if (!res.ok) {
     const text = await res.text();
     throw new Error(parseErrorResponse(text, 'Invalid or expired reset token'));
+  }
+}
+
+export interface AcceptInviteRequest {
+  token: string;
+  newPassword: string;
+  firstName: string;
+  lastName: string;
+  title?: string;
+}
+
+export interface InviteProfileResponse {
+  title?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  invitedEmail?: string | null;
+  expiresAt?: string | null;
+}
+
+/** Reads invite profile defaults (title/first/last) for prefill by token. */
+export async function fetchInviteProfile(token: string): Promise<InviteProfileResponse> {
+  const normalizedToken = token.trim();
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/auth/invite-profile?token=${encodeURIComponent(normalizedToken)}`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(parseErrorResponse(text, 'Invalid or expired invitation token'));
+  }
+  const payload = await res.json();
+  return {
+    title: payload?.title == null ? null : String(payload.title),
+    firstName: payload?.firstName == null ? null : String(payload.firstName),
+    lastName: payload?.lastName == null ? null : String(payload.lastName),
+    invitedEmail: payload?.invitedEmail == null ? null : String(payload.invitedEmail),
+    expiresAt: payload?.expiresAt == null ? null : String(payload.expiresAt),
+  };
+}
+
+/** Accept invite token and complete first-time account setup. */
+export async function acceptInvite(request: AcceptInviteRequest): Promise<void> {
+  const body: Record<string, unknown> = {
+    token: request.token.trim(),
+    newPassword: request.newPassword,
+    firstName: request.firstName.trim(),
+    lastName: request.lastName.trim(),
+  };
+  if (request.title != null && request.title.trim() !== '') {
+    body.title = request.title.trim();
+  }
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/auth/accept-invite`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(parseErrorResponse(text, 'Invalid or expired invitation token'));
   }
 }
 
@@ -146,12 +240,23 @@ function getAuthHeaders(): HeadersInit {
 }
 
 /** Fetch with retry for transient failures on unstable connections (e.g. low-bandwidth). */
-async function fetchWithRetry(url: string, init?: RequestInit): Promise<Response> {
+async function fetchWithRetry(
+  url: string,
+  init?: RequestInit,
+  options?: { skipAuthRefresh?: boolean; didAuthRefresh?: boolean },
+): Promise<Response> {
   const maxRetries = 2;
   let lastError: Error | null = null;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const res = await fetch(url, init);
+      if (res.status === 401 && !options?.skipAuthRefresh && !options?.didAuthRefresh && shouldAttemptAuthRefresh(url)) {
+        const refreshed = await ensureFreshAccessToken();
+        if (refreshed) {
+          const retryInit = withLatestAuthHeader(init);
+          return fetchWithRetry(url, retryInit, { skipAuthRefresh: false, didAuthRefresh: true });
+        }
+      }
       if (res.ok) return res;
       if (res.status >= 500 && attempt < maxRetries) {
         await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 500));
@@ -168,6 +273,77 @@ async function fetchWithRetry(url: string, init?: RequestInit): Promise<Response
     }
   }
   throw lastError ?? new Error('Request failed');
+}
+
+function shouldAttemptAuthRefresh(url: string): boolean {
+  if (typeof window === 'undefined') return false;
+  const refreshToken = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+  if (!refreshToken) return false;
+  return !url.includes('/api/auth/login') && !url.includes('/api/auth/refresh') && !url.includes('/api/auth/logout');
+}
+
+async function ensureFreshAccessToken(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  if (refreshInFlight) return refreshInFlight;
+
+  const refreshToken = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+  if (!refreshToken) {
+    clearAuth();
+    return false;
+  }
+
+  refreshInFlight = (async () => {
+    try {
+      const res = await fetchWithRetry(
+        `${getBaseUrl()}/api/auth/refresh`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        },
+        { skipAuthRefresh: true },
+      );
+      if (!res.ok) {
+        clearAuth();
+        return false;
+      }
+      const payload = await res.json() as {
+        token?: string;
+        refreshToken?: string;
+        username?: string;
+        displayName?: string | null;
+        role?: string | null;
+      };
+      if (!payload.token || !payload.refreshToken) {
+        clearAuth();
+        return false;
+      }
+      const fallbackUser = getStoredUser();
+      const nextUser = {
+        username: payload.username ?? fallbackUser?.username ?? '',
+        displayName: payload.displayName ?? fallbackUser?.displayName ?? null,
+        role: payload.role ?? fallbackUser?.role ?? null,
+      };
+      persistAuthCredentials(payload.token, payload.refreshToken, nextUser);
+      return true;
+    } catch {
+      clearAuth();
+      return false;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+
+  return refreshInFlight;
+}
+
+function withLatestAuthHeader(init?: RequestInit): RequestInit | undefined {
+  if (!init) return init;
+  const token = getStoredToken();
+  if (!token) return init;
+  const headers = new Headers(init.headers ?? {});
+  headers.set('Authorization', `Bearer ${token}`);
+  return { ...init, headers };
 }
 
 /** Parse error response text; prefer 'error' or 'message' from JSON when present. */
@@ -205,10 +381,25 @@ export interface BaptismResponse {
   externalCertificatePath?: string | null;
   /** Issuing parish name for the external certificate. */
   externalCertificateIssuingParish?: string | null;
+  /** Current birth certificate file path when available. */
+  birthCertificateCurrentPath?: string | null;
   placeOfBirth?: string | null;
   placeOfBaptism?: string | null;
   dateOfBaptism?: string | null;
   liberNo?: string | null;
+}
+
+export interface BaptismDocumentVersionResponse {
+  id: number;
+  baptismId: number;
+  documentType: string;
+  originalFilename: string;
+  contentType?: string | null;
+  sizeBytes?: number | null;
+  uploadedAt: string;
+  uploadedById?: number | null;
+  uploadedByName?: string | null;
+  current: boolean;
 }
 
 export interface BaptismRequest {
@@ -277,6 +468,11 @@ export interface DioceseResponse {
   id: number;
   name: string;
   dioceseName?: string;
+  countryCode?: string;
+  countryName?: string;
+  jurisdictionType?: string;
+  ordinaryName?: string;
+  ordinaryTitle?: string;
 }
 
 export async function fetchDioceses(): Promise<DioceseResponse[]> {
@@ -291,6 +487,41 @@ export async function fetchDioceses(): Promise<DioceseResponse[]> {
       id: Number.isNaN(id) ? 0 : id,
       name: resolvedName || `Diocese ${Number.isNaN(id) ? '' : id}`.trim(),
       dioceseName: item?.dioceseName,
+      countryCode: typeof item?.countryCode === 'string' ? item.countryCode : undefined,
+      countryName: typeof item?.countryName === 'string' ? item.countryName : undefined,
+      jurisdictionType: typeof item?.jurisdictionType === 'string' ? item.jurisdictionType : undefined,
+      ordinaryName: typeof item?.ordinaryName === 'string' ? item.ordinaryName : undefined,
+      ordinaryTitle: typeof item?.ordinaryTitle === 'string' ? item.ordinaryTitle : undefined,
+    };
+  }).filter((d) => d.id > 0);
+}
+
+export async function searchDioceses(countryCode: string, query?: string): Promise<DioceseResponse[]> {
+  const normalizedCountryCode = countryCode.trim().toUpperCase();
+  if (!normalizedCountryCode) return [];
+
+  const params = new URLSearchParams({ countryCode: normalizedCountryCode });
+  const normalizedQuery = query?.trim();
+  if (normalizedQuery) params.set('q', normalizedQuery);
+
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/dioceses/search?${params.toString()}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) throw new Error(res.status === 401 ? 'Unauthorized' : 'Failed to search dioceses');
+  const raw = await res.json();
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item: any) => {
+    const id = Number(item?.id);
+    const resolvedName = String(item?.name ?? item?.dioceseName ?? '').trim();
+    return {
+      id: Number.isNaN(id) ? 0 : id,
+      name: resolvedName || `Diocese ${Number.isNaN(id) ? '' : id}`.trim(),
+      dioceseName: item?.dioceseName,
+      countryCode: typeof item?.countryCode === 'string' ? item.countryCode : undefined,
+      countryName: typeof item?.countryName === 'string' ? item.countryName : undefined,
+      jurisdictionType: typeof item?.jurisdictionType === 'string' ? item.jurisdictionType : undefined,
+      ordinaryName: typeof item?.ordinaryName === 'string' ? item.ordinaryName : undefined,
+      ordinaryTitle: typeof item?.ordinaryTitle === 'string' ? item.ordinaryTitle : undefined,
     };
   }).filter((d) => d.id > 0);
 }
@@ -316,12 +547,37 @@ export async function fetchParishes(dioceseId: number): Promise<ParishResponse[]
   return res.json();
 }
 
-export async function createDiocese(name: string): Promise<DioceseResponse> {
-  const res = await fetchWithRetry(`${getBaseUrl()}/api/dioceses`, {
+type CreateDioceseOptions = {
+  countryCode?: string;
+  countryName?: string;
+  jurisdictionType?: string;
+  ordinaryName?: string;
+  ordinaryTitle?: string;
+};
+
+export async function createDiocese(name: string, options: CreateDioceseOptions = {}): Promise<DioceseResponse> {
+  const payload = {
+    dioceseName: name,
+    ...(options.countryCode ? { countryCode: options.countryCode } : {}),
+    ...(options.countryName ? { countryName: options.countryName } : {}),
+    ...(options.jurisdictionType ? { jurisdictionType: options.jurisdictionType } : {}),
+    ...(options.ordinaryName ? { ordinaryName: options.ordinaryName } : {}),
+    ...(options.ordinaryTitle ? { ordinaryTitle: options.ordinaryTitle } : {}),
+  };
+
+  let res = await fetchWithRetry(`${getBaseUrl()}/api/dioceses`, {
     method: 'POST',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ dioceseName: name }),
+    body: JSON.stringify(payload),
   });
+  if (!res.ok && Object.keys(options).length > 0) {
+    // Retry with the legacy payload so older backend deployments still accept diocese creation.
+    res = await fetchWithRetry(`${getBaseUrl()}/api/dioceses`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ dioceseName: name }),
+    });
+  }
   if (!res.ok) {
     const text = await res.text();
     throw new Error(parseErrorResponse(text, 'Failed to create diocese'));
@@ -604,6 +860,75 @@ export async function uploadBaptismExternalCertificate(
     throw new Error(msg || 'Failed to upload certificate');
   }
   return res.json();
+}
+
+/** Upload birth certificate attachment for an existing baptism (multipart field `file`). */
+export async function uploadBaptismBirthCertificate(
+  baptismId: number,
+  file: File
+): Promise<BaptismDocumentVersionResponse> {
+  const formData = new FormData();
+  formData.set('file', file);
+  const token = getStoredToken();
+  const headers: HeadersInit = {};
+  if (token) (headers as Record<string, string>).Authorization = `Bearer ${token}`;
+
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/baptisms/${baptismId}/birth-certificate`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Unauthorized');
+    const text = await res.text();
+    let msg = text;
+    try {
+      const json = JSON.parse(text) as { error?: string; message?: string; detail?: string };
+      if (typeof json?.detail === 'string' && json.detail.trim()) msg = json.detail;
+      else if (typeof json?.message === 'string' && json.message.trim()) msg = json.message;
+      else if (typeof json?.error === 'string' && json.error.trim()) msg = json.error;
+    } catch {
+      if (text && text.length < 200) msg = text;
+    }
+    throw new Error(msg || 'Failed to upload birth certificate');
+  }
+  return res.json();
+}
+
+/** Fetch current birth certificate attachment for a baptism. */
+export async function fetchBaptismBirthCertificate(baptismId: number): Promise<Blob> {
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/baptisms/${baptismId}/birth-certificate`, {
+    headers: getAuthHeaders(),
+  });
+  if (res.status === 404) throw new Error('No birth certificate for this baptism');
+  if (!res.ok) throw new Error(res.status === 401 ? 'Unauthorized' : 'Failed to load birth certificate');
+  return res.blob();
+}
+
+/** Fetch birth certificate versions for a baptism (latest first). */
+export async function fetchBaptismBirthCertificateVersions(
+  baptismId: number
+): Promise<BaptismDocumentVersionResponse[]> {
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/baptisms/${baptismId}/birth-certificate/versions`, {
+    headers: getAuthHeaders(),
+  });
+  if (res.status === 404) return [];
+  if (!res.ok) throw new Error(res.status === 401 ? 'Unauthorized' : 'Failed to load birth certificate history');
+  return res.json();
+}
+
+/** Fetch a specific historical birth certificate version file. */
+export async function fetchBaptismBirthCertificateVersion(
+  baptismId: number,
+  versionId: number
+): Promise<Blob> {
+  const res = await fetchWithRetry(
+    `${getBaseUrl()}/api/baptisms/${baptismId}/birth-certificate/versions/${versionId}`,
+    { headers: getAuthHeaders() }
+  );
+  if (res.status === 404) throw new Error('Birth certificate version not found');
+  if (!res.ok) throw new Error(res.status === 401 ? 'Unauthorized' : 'Failed to load birth certificate version');
+  return res.blob();
 }
 
 export async function createBaptism(parishId: number, body: BaptismRequest): Promise<BaptismResponse> {
@@ -1555,6 +1880,29 @@ export async function listUsersWithParishAccess(): Promise<UserParishAccessRespo
   }));
 }
 
+export async function searchUsersWithParishAccess(
+  query: string,
+  page = 0,
+  size = 20
+): Promise<SacramentPageResponse<UserParishAccessResponse>> {
+  const params = new URLSearchParams({
+    q: query.trim(),
+    page: String(page),
+    size: String(size),
+    sort: 'username,asc',
+  });
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/admin/users/parish-access/search?${params.toString()}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    if (res.status === 403) throw new Error('Admin access required');
+    throw new Error(res.status === 401 ? 'Unauthorized' : 'Failed to fetch users');
+  }
+  return normalizePageResponse<UserParishAccessResponse>(
+    await res.json() as RawPageResponse<UserParishAccessResponse>
+  );
+}
+
 export async function getUserParishAccess(userId: number): Promise<UserParishAccessResponse> {
   const res = await fetchWithRetry(`${getBaseUrl()}/api/admin/users/${userId}/parish-access`, {
     headers: getAuthHeaders(),
@@ -1587,6 +1935,47 @@ export interface CreateUserRequest {
   defaultParishId?: number | null;
   parishIds: number[];
   defaultPassword: string;
+}
+
+export interface IssueUserInvitationResponse {
+  invitationId: number;
+  userId: number;
+  invitedEmail: string;
+  token?: string | null;
+  expiresAt: string;
+  invitationStatus?: 'PENDING' | 'ACCEPTED' | 'REVOKED' | 'EXPIRED' | null;
+  emailDeliveryStatus?: 'PENDING' | 'SENT' | 'FAILED' | null;
+  lastEmailAttemptAt?: string | null;
+  lastEmailError?: string | null;
+  emailSentAt?: string | null;
+  deliveryMessage?: string | null;
+}
+
+function mapIssueUserInvitationResponse(payload: any): IssueUserInvitationResponse {
+  return {
+    invitationId: Number(payload?.invitationId),
+    userId: Number(payload?.userId),
+    invitedEmail: String(payload?.invitedEmail ?? ''),
+    token: payload?.token == null ? null : String(payload.token),
+    expiresAt: String(payload?.expiresAt ?? ''),
+    invitationStatus:
+      payload?.invitationStatus === 'PENDING' ||
+      payload?.invitationStatus === 'ACCEPTED' ||
+      payload?.invitationStatus === 'REVOKED' ||
+      payload?.invitationStatus === 'EXPIRED'
+        ? payload.invitationStatus
+        : null,
+    emailDeliveryStatus:
+      payload?.emailDeliveryStatus === 'PENDING' ||
+      payload?.emailDeliveryStatus === 'SENT' ||
+      payload?.emailDeliveryStatus === 'FAILED'
+        ? payload.emailDeliveryStatus
+        : null,
+    lastEmailAttemptAt: payload?.lastEmailAttemptAt == null ? null : String(payload.lastEmailAttemptAt),
+    lastEmailError: payload?.lastEmailError == null ? null : String(payload.lastEmailError),
+    emailSentAt: payload?.emailSentAt == null ? null : String(payload.emailSentAt),
+    deliveryMessage: payload?.deliveryMessage == null ? null : String(payload.deliveryMessage),
+  };
 }
 
 export async function createUser(request: CreateUserRequest): Promise<UserParishAccessResponse> {
@@ -1627,6 +2016,48 @@ export async function createUser(request: CreateUserRequest): Promise<UserParish
       ? u.parishAccessIds.map((id: unknown) => Number(id)).filter((n: number) => !Number.isNaN(n) && n > 0)
       : [],
   };
+}
+
+export async function issueUserInvitation(userId: number): Promise<IssueUserInvitationResponse> {
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/admin/users/invitations`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ userId }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(parseErrorResponse(text, 'Failed to issue invitation'));
+  }
+  const payload = await res.json();
+  return mapIssueUserInvitationResponse(payload);
+}
+
+export async function resendUserInvitation(invitationId: number): Promise<IssueUserInvitationResponse> {
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/admin/users/invitations/${invitationId}/resend`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(parseErrorResponse(text, 'Failed to resend invitation'));
+  }
+  const payload = await res.json();
+  return mapIssueUserInvitationResponse(payload);
+}
+
+export async function getLatestUserInvitation(userId: number): Promise<IssueUserInvitationResponse | null> {
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/admin/users/${userId}/invitation/latest`, {
+    headers: getAuthHeaders(),
+  });
+  if (res.status === 404) {
+    return null;
+  }
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(parseErrorResponse(text, 'Failed to load latest invitation'));
+  }
+  const payload = await res.json();
+  return mapIssueUserInvitationResponse(payload);
 }
 
 export async function replaceUserParishAccess(

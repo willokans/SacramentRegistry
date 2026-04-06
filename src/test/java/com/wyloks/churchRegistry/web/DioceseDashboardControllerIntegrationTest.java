@@ -54,6 +54,7 @@ class DioceseDashboardControllerIntegrationTest {
 
     private Diocese diocese;
     private Parish parish;
+    private Parish otherParishInSameDiocese;
     private String parishPriestUsername;
     private String parishPriestPassword;
 
@@ -71,6 +72,12 @@ class DioceseDashboardControllerIntegrationTest {
                 .description("Test")
                 .build());
 
+        otherParishInSameDiocese = parishRepository.save(Parish.builder()
+                .parishName("Other Parish Same Diocese")
+                .diocese(diocese)
+                .description("No access for admin user")
+                .build());
+
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         parishPriestUsername = "priest_" + suffix;
         parishPriestPassword = "secret123";
@@ -84,6 +91,13 @@ class DioceseDashboardControllerIntegrationTest {
                 .build();
         parishPriest.getParishAccesses().add(parish);
         appUserRepository.save(parishPriest);
+
+        appUserRepository.findByUsername("admin").ifPresent(admin -> {
+            admin.setParish(parish);
+            admin.getParishAccesses().clear();
+            admin.getParishAccesses().add(parish);
+            appUserRepository.save(admin);
+        });
     }
 
     @Test
@@ -110,6 +124,26 @@ class DioceseDashboardControllerIntegrationTest {
         JsonNode json = objectMapper.readTree(response);
         assertThat(json.get("counts").get("parishes").asLong()).isEqualTo(1);
         assertThat(json.get("parishActivity").isArray()).isTrue();
+    }
+
+    @Test
+    void admin_dioceseDashboard_countsOnlyAssignedParishes_whenDioceseHasMultipleParishes() throws Exception {
+        String token = login("admin", "password");
+
+        String response = mvc.perform(get("/api/dioceses/{dioceseId}/dashboard", diocese.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        JsonNode json = objectMapper.readTree(response);
+        JsonNode parishActivity = json.get("parishActivity");
+        assertThat(otherParishInSameDiocese.getId()).isNotEqualTo(parish.getId());
+        assertThat(json.get("counts").get("parishes").asLong()).isEqualTo(1);
+        assertThat(parishActivity.isArray()).isTrue();
+        assertThat(parishActivity.size()).isEqualTo(1);
+        assertThat(parishActivity.get(0).get("parishId").asLong()).isEqualTo(parish.getId());
     }
 
     @Test

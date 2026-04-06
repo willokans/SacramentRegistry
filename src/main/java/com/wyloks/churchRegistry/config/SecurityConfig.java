@@ -53,9 +53,15 @@ public class SecurityConfig {
                         .requestMatchers("/api/health/sentry-test").permitAll()
                         .requestMatchers("/error").permitAll()
                         .requestMatchers("/api/auth/login", "/api/auth/refresh", "/api/auth/logout",
-                        "/api/auth/forgot-password", "/api/auth/reset-password-by-token").permitAll()
+                        "/api/auth/forgot-password", "/api/auth/reset-password-by-token", "/api/auth/accept-invite",
+                        "/api/auth/invite-profile").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs", "/v3/api-docs/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/admin/users").hasRole("SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/admin/users/invitations").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/admin/users/invitations/*/resend").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/admin/users/invitations/*/revoke").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/dioceses").hasRole("SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/parishes").hasRole("SUPER_ADMIN")
                         .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
                         .requestMatchers(HttpMethod.POST,
                                 "/api/parishes/*/baptisms",

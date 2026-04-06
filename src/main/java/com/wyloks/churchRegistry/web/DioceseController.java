@@ -32,6 +32,14 @@ public class DioceseController {
         return dioceseService.findDiocesesWithParishes();
     }
 
+    @GetMapping("/search")
+    public List<DioceseResponse> searchDioceses(
+            @RequestParam("countryCode") String countryCode,
+            @RequestParam(name = "q", required = false) String query
+    ) {
+        return dioceseService.searchByCountryAndQuery(countryCode, query);
+    }
+
     @GetMapping("/{dioceseId}/parishes")
     public List<ParishResponse> getParishesByDiocese(@PathVariable Long dioceseId) {
         return parishService.findByDioceseId(dioceseId);

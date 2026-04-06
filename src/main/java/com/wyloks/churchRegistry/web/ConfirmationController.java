@@ -19,16 +19,11 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
-import java.util.Optional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
 public class ConfirmationController {
-
-    private static final Logger log = LoggerFactory.getLogger(ConfirmationController.class);
 
     private final ConfirmationService confirmationService;
     private final SacramentAuthorizationService authorizationService;
@@ -46,7 +41,9 @@ public class ConfirmationController {
 
     @GetMapping("/confirmations/{id}")
     public ResponseEntity<ConfirmationResponse> getById(@PathVariable Long id) {
-        authorizationService.findConfirmationParishId(id).ifPresent(authorizationService::requireParishAccess);
+        if (!authorizationService.requireReadAccessForConfirmation(id)) {
+            return ResponseEntity.notFound().build();
+        }
         return confirmationService.findById(id)
                 .map(r -> {
                     Long parishId = authorizationService.findConfirmationParishId(id).orElse(null);
@@ -58,7 +55,9 @@ public class ConfirmationController {
 
     @GetMapping("/communions/{communionId}/confirmation")
     public ResponseEntity<ConfirmationResponse> getByCommunionId(@PathVariable Long communionId) {
-        authorizationService.findConfirmationParishIdByCommunionId(communionId).ifPresent(authorizationService::requireParishAccess);
+        if (!authorizationService.requireReadAccessForConfirmationByCommunionId(communionId)) {
+            return ResponseEntity.notFound().build();
+        }
         return confirmationService.findByCommunionId(communionId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -67,14 +66,7 @@ public class ConfirmationController {
     @PostMapping("/confirmations")
     public ResponseEntity<ConfirmationResponse> create(@Valid @RequestBody ConfirmationRequest request) {
         Long communionId = request.getCommunionId();
-        Optional<Long> parishOpt = authorizationService.findCommunionParishId(communionId);
-        if (parishOpt.isEmpty()) {
-            log.warn("Confirmation create failed: communionId={} has no parish (communion missing or baptism has no parish)", communionId);
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Communion not found or has no parish");
-        }
-        Long parishId = parishOpt.get();
-        authorizationService.requireWriteAccessForParish(parishId);
+        long parishId = authorizationService.requireCommunionForConfirmationCreate(communionId);
         ConfirmationResponse created = confirmationService.create(request);
         auditService.logCreate(SacramentType.CONFIRMATION, created.getId(), parishId);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
@@ -82,7 +74,9 @@ public class ConfirmationController {
 
     @PatchMapping("/confirmations/{id}")
     public ResponseEntity<ConfirmationResponse> updateNote(@PathVariable Long id, @RequestBody NoteUpdateRequest request) {
-        authorizationService.findConfirmationParishId(id).ifPresent(authorizationService::requireWriteAccessForParish);
+        if (!authorizationService.requireWriteAccessForConfirmation(id)) {
+            return ResponseEntity.notFound().build();
+        }
         ConfirmationResponse updated = confirmationService.updateNote(id, request != null ? request.getNote() : null);
         Long parishId = authorizationService.findConfirmationParishId(id).orElse(null);
         auditService.logUpdate(SacramentType.CONFIRMATION, id, parishId, "note");
@@ -91,7 +85,9 @@ public class ConfirmationController {
 
     @GetMapping("/confirmations/{id}/notes")
     public List<SacramentNoteResponse> getNoteHistory(@PathVariable Long id) {
-        authorizationService.findConfirmationParishId(id).ifPresent(authorizationService::requireParishAccess);
+        if (!authorizationService.requireReadAccessForConfirmation(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Confirmation not found");
+        }
         List<SacramentNoteResponse> result = confirmationService.getNoteHistory(id);
         Long parishId = authorizationService.findConfirmationParishId(id).orElse(null);
         auditService.logRead(SacramentType.CONFIRMATION, id, parishId);

@@ -15,8 +15,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Rate limits auth endpoints (login, refresh, logout) and all API requests
- * to mitigate brute force and abuse. Uses client IP (or X-Forwarded-For when behind proxy).
+ * Rate limits all HTTP entry points except health, CORS preflight, and Spring {@code /error}.
+ * Login: {@code /api/auth/login} uses a strict bucket (default 5 attempts per 15 minutes per client IP).
+ * Refresh/logout share a separate bucket; everything else shares the general API bucket.
+ * Client key: {@code X-Forwarded-For} first hop when present, else remote address.
  */
 public class RateLimitFilter extends OncePerRequestFilter {
 
@@ -51,6 +53,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
             @NonNull HttpServletRequest request,
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain) throws ServletException, IOException {
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         String clientKey = resolveClientKey(request);
         String path = request.getRequestURI();
 
@@ -78,17 +85,15 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private Bucket resolveBucket(String path, String clientKey) {
         if (path == null) return null;
-        if (path.startsWith("/api/health")) return null; // Exempt for load balancer health checks
+        if (path.startsWith("/api/health")) return null; // load balancer / probes
+        if (path.startsWith("/error")) return null; // avoid compounding failures on error dispatch
         if (path.startsWith("/api/auth/login")) {
             return loginBuckets.computeIfAbsent(clientKey, k -> buildBucket(loginLimit, loginPeriodMinutes));
         }
         if (path.startsWith("/api/auth/refresh") || path.startsWith("/api/auth/logout")) {
             return refreshBuckets.computeIfAbsent(clientKey, k -> buildBucket(refreshLimit, refreshPeriodMinutes));
         }
-        if (path.startsWith("/api/")) {
-            return apiBuckets.computeIfAbsent(clientKey, k -> buildBucket(apiLimit, apiPeriodMinutes));
-        }
-        return null;
+        return apiBuckets.computeIfAbsent(clientKey, k -> buildBucket(apiLimit, apiPeriodMinutes));
     }
 
     private Bucket buildBucket(int capacity, int periodMinutes) {

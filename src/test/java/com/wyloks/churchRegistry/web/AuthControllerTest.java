@@ -3,6 +3,7 @@ package com.wyloks.churchRegistry.web;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wyloks.churchRegistry.config.TestSecurityConfig;
 import com.wyloks.churchRegistry.dto.ForgotPasswordResponse;
+import com.wyloks.churchRegistry.dto.InviteProfileResponse;
 import com.wyloks.churchRegistry.dto.LoginRequest;
 import com.wyloks.churchRegistry.dto.LoginResponse;
 import com.wyloks.churchRegistry.security.CurrentUserAccessService;
@@ -20,6 +21,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -267,5 +270,61 @@ class AuthControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void acceptInvite_returns204_whenRequestValid() throws Exception {
+        mvc.perform(post("/api/auth/accept-invite")
+                        .header("X-Forwarded-For", "203.0.113.10, 10.0.0.1")
+                        .header("User-Agent", "JUnit-Agent/1.0")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "token":"invite-token-123",
+                                  "newPassword":"newpass123",
+                                  "firstName":"John",
+                                  "lastName":"Doe",
+                                  "title":"Fr."
+                                }
+                                """))
+                .andExpect(status().isNoContent());
+
+        verify(authService).acceptInvite(
+                eq("invite-token-123"),
+                eq("newpass123"),
+                eq("John"),
+                eq("Doe"),
+                eq("Fr."),
+                eq("203.0.113.10"),
+                eq("JUnit-Agent/1.0")
+        );
+    }
+
+    @Test
+    void acceptInvite_returns400_whenRequiredFieldsMissing() throws Exception {
+        mvc.perform(post("/api/auth/accept-invite")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getInviteProfile_returns200AndPrefillData() throws Exception {
+        InviteProfileResponse response = InviteProfileResponse.builder()
+                .title("Fr.")
+                .firstName("John")
+                .lastName("Doe")
+                .invitedEmail("john@example.com")
+                .expiresAt(java.time.Instant.now().plusSeconds(3600))
+                .build();
+        when(authService.getInviteProfile("invite-token-123")).thenReturn(response);
+
+        mvc.perform(get("/api/auth/invite-profile").param("token", "invite-token-123"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Fr."))
+                .andExpect(jsonPath("$.firstName").value("John"))
+                .andExpect(jsonPath("$.lastName").value("Doe"))
+                .andExpect(jsonPath("$.invitedEmail").value("john@example.com"))
+                .andExpect(jsonPath("$.expiresAt").exists());
     }
 }

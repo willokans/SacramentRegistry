@@ -31,6 +31,7 @@ public class BaptismResponse {
     private String note;
     private String externalCertificatePath;
     private String externalCertificateIssuingParish;
+    private String birthCertificateCurrentPath;
     private String placeOfBirth;
     private String placeOfBaptism;
     private LocalDate dateOfBaptism;

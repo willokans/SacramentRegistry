@@ -45,7 +45,9 @@ public class MarriageController {
 
     @GetMapping("/marriages/{id}")
     public ResponseEntity<MarriageResponse> getById(@PathVariable Long id) {
-        authorizationService.findMarriageParishId(id).ifPresent(authorizationService::requireParishAccess);
+        if (!authorizationService.requireReadAccessForMarriage(id)) {
+            return ResponseEntity.notFound().build();
+        }
         return marriageService.findById(id)
                 .map(r -> {
                     Long parishId = authorizationService.findMarriageParishId(id).orElse(null);
@@ -57,7 +59,9 @@ public class MarriageController {
 
     @GetMapping("/confirmations/{confirmationId}/marriage")
     public ResponseEntity<MarriageResponse> getByConfirmationId(@PathVariable Long confirmationId) {
-        authorizationService.findMarriageParishIdByConfirmationId(confirmationId).ifPresent(authorizationService::requireParishAccess);
+        if (!authorizationService.requireReadAccessForMarriageByConfirmationId(confirmationId)) {
+            return ResponseEntity.notFound().build();
+        }
         return marriageService.findByConfirmationId(confirmationId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -65,7 +69,9 @@ public class MarriageController {
 
     @GetMapping("/baptisms/{baptismId}/marriage")
     public ResponseEntity<MarriageResponse> getByBaptismId(@PathVariable Long baptismId) {
-        authorizationService.findBaptismParishId(baptismId).ifPresent(authorizationService::requireParishAccess);
+        if (!authorizationService.requireReadAccessForMarriageByBaptismId(baptismId)) {
+            return ResponseEntity.notFound().build();
+        }
         return marriageService.findByBaptismId(baptismId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -73,10 +79,7 @@ public class MarriageController {
 
     @PostMapping("/marriages")
     public ResponseEntity<MarriageResponse> create(@Valid @RequestBody MarriageRequest request) {
-        Long parishId = authorizationService.findMarriageParishIdByConfirmationId(request.getConfirmationId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Confirmation not found or has no parish"));
-        authorizationService.requireWriteAccessForParish(parishId);
+        long parishId = authorizationService.requireConfirmationForMarriageCreate(request.getConfirmationId());
         MarriageResponse created = marriageService.create(request);
         auditService.logCreate(SacramentType.MARRIAGE, created.getId(), parishId);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
@@ -117,19 +120,15 @@ public class MarriageController {
                         "At least one party must have an in-parish Confirmation record linked for the marriage register.");
             }
             if (groomConf != null) {
-                Long p = authorizationService.findMarriageParishIdByConfirmationId(groomConf.longValue())
-                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                "Groom confirmation not found or has no parish"));
-                if (!p.equals(parishId)) {
+                long p = authorizationService.requireWriteAccessForExistingConfirmation(groomConf.longValue());
+                if (p != parishId) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                             "Groom Confirmation parish does not match marriage parish");
                 }
             }
             if (brideConf != null) {
-                Long p = authorizationService.findMarriageParishIdByConfirmationId(brideConf.longValue())
-                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                "Bride confirmation not found or has no parish"));
-                if (!p.equals(parishId)) {
+                long p = authorizationService.requireWriteAccessForExistingConfirmation(brideConf.longValue());
+                if (p != parishId) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                             "Bride Confirmation parish does not match marriage parish");
                 }
@@ -145,10 +144,8 @@ public class MarriageController {
             confirmationId = brideConf.longValue();
         }
         if (confirmationId != null) {
-            Long parishFromConf = authorizationService.findMarriageParishIdByConfirmationId(confirmationId)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "Confirmation not found or has no parish"));
-            if (!parishFromConf.equals(parishId)) {
+            long parishFromConf = authorizationService.requireWriteAccessForExistingConfirmation(confirmationId);
+            if (parishFromConf != parishId) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Confirmation parish does not match marriage parish");
             }
@@ -167,7 +164,9 @@ public class MarriageController {
 
     @PatchMapping("/marriages/{id}")
     public ResponseEntity<MarriageResponse> updateNote(@PathVariable Long id, @RequestBody NoteUpdateRequest request) {
-        authorizationService.findMarriageParishId(id).ifPresent(authorizationService::requireWriteAccessForParish);
+        if (!authorizationService.requireWriteAccessForMarriage(id)) {
+            return ResponseEntity.notFound().build();
+        }
         MarriageResponse updated = marriageService.updateNote(id, request != null ? request.getNote() : null);
         Long parishId = authorizationService.findMarriageParishId(id).orElse(null);
         auditService.logUpdate(SacramentType.MARRIAGE, id, parishId, "note");
@@ -176,7 +175,9 @@ public class MarriageController {
 
     @GetMapping("/marriages/{id}/notes")
     public List<SacramentNoteResponse> getNoteHistory(@PathVariable Long id) {
-        authorizationService.findMarriageParishId(id).ifPresent(authorizationService::requireParishAccess);
+        if (!authorizationService.requireReadAccessForMarriage(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Marriage not found");
+        }
         List<SacramentNoteResponse> result = marriageService.getNoteHistory(id);
         Long parishId = authorizationService.findMarriageParishId(id).orElse(null);
         auditService.logRead(SacramentType.MARRIAGE, id, parishId);

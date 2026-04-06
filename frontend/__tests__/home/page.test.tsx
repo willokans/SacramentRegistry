@@ -1,10 +1,10 @@
 /**
  * TDD: Landing page (home) tests.
- * - Renders hero, features, access section, footer
- * - Sign in links present
+ * - Renders updated persuasive sections and key messaging
+ * - Header anchors and CTA links are wired correctly
  * - When authenticated, redirects to /dashboard
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useRouter, usePathname } from 'next/navigation';
 import LandingPage from '@/app/page';
 
@@ -23,6 +23,8 @@ const mockReplace = jest.fn();
 (usePathname as jest.Mock).mockReturnValue('/');
 
 describe('Landing page (home)', () => {
+  const requestAccessHref = 'mailto:support@sacramentregistry.com?subject=Request%20Access%20for%20Parish';
+
   beforeEach(() => {
     mockReplace.mockClear();
     const api = require('@/lib/api');
@@ -30,38 +32,124 @@ describe('Landing page (home)', () => {
     api.getStoredUser.mockReturnValue(null);
   });
 
-  it('renders hero with headline and sign in button', () => {
+  it('renders updated hero and primary CTAs', () => {
     render(<LandingPage />);
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Sacramental Record Management/i);
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Sacramental Records - Even Without Internet/i);
+    expect(screen.getByText(/Works even when internet is slow or unavailable/i)).toBeInTheDocument();
+    expect(screen.getByText(/Keep sacramental records accurate, searchable, and parish-controlled/i)).toBeInTheDocument();
+    expect(screen.getByText(/without slowing ministry work/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Designed for Catholic parish workflows and diocesan record-keeping/i)).not.toBeInTheDocument();
+
     const signInLinks = screen.getAllByRole('link', { name: /sign in/i });
     expect(signInLinks.length).toBeGreaterThan(0);
     expect(signInLinks[0]).toHaveAttribute('href', '/login');
+
+    const requestAccessLinks = screen.getAllByRole('link', { name: /Request Access for Your Parish/i });
+    expect(requestAccessLinks.length).toBeGreaterThan(0);
+    expect(requestAccessLinks[0]).toHaveAttribute('href', requestAccessHref);
   });
 
-  it('renders features section', () => {
+  it('renders key section headings including offline value proposition', () => {
     render(<LandingPage />);
-    expect(screen.getByText(/Everything a parish needs to manage sacramental records/i)).toBeInTheDocument();
-    expect(screen.getByText(/Register Sacraments/i)).toBeInTheDocument();
-    expect(screen.getByText(/Search Parish Records/i)).toBeInTheDocument();
-    expect(screen.getByText(/Generate Certificates/i)).toBeInTheDocument();
-    expect(screen.getByText(/Multi-Parish Access/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Why Sacrament Registry/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Practical features for priests and parish staff/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Structured Sacrament Records/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Find Records in Seconds/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Works Even Without Internet/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Built for Parishes with Unreliable Internet/i })).toBeInTheDocument();
+    expect(screen.getByText(/Continue recording with confidence/i)).toBeInTheDocument();
+    expect(screen.getByText(/syncs automatically when the connection returns/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /How it works/i })).toBeInTheDocument();
   });
 
-  it('renders access section', () => {
+  it('renders trust wording and invitation-only access section', () => {
     render(<LandingPage />);
     expect(screen.getByText(/Access is by invitation only/i)).toBeInTheDocument();
+    expect(screen.getByText(/available to Catholic parishes and dioceses/i)).toBeInTheDocument();
+    expect(screen.getByText(/secure, parish-approved onboarding/i)).toBeInTheDocument();
+    expect(screen.getByText(/Contact your parish office or write to support for access guidance/i)).toBeInTheDocument();
+    expect(screen.getByText(/Or email us directly at/i)).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'info@sacramentregistry.com' })[0]).toHaveAttribute('href', 'mailto:info@sacramentregistry.com');
+    expect(screen.getByText(/Replace manual registers and scattered records with a structured, reliable system/i)).toBeInTheDocument();
+    expect(screen.getByText(/Designed with input from parish priests and real parish workflows/i)).toBeInTheDocument();
+    expect(screen.getByText(/Built specifically for Catholic parish and diocesan sacrament record-keeping/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Designed for Catholic parish workflows/i).length).toBeGreaterThan(0);
   });
 
-  it('renders footer with Sacrament Registry branding', () => {
+  it('renders header nav anchors for updated sections', () => {
+    render(<LandingPage />);
+
+    expect(screen.getAllByRole('link', { name: 'Why' })[0]).toHaveAttribute('href', '#why');
+    expect(screen.getAllByRole('link', { name: 'Features' })[0]).toHaveAttribute('href', '#features');
+    expect(screen.getAllByRole('link', { name: 'How it works' })[0]).toHaveAttribute('href', '#how-it-works');
+    expect(screen.getAllByRole('link', { name: 'Offline' })[0]).toHaveAttribute('href', '#offline');
+    expect(screen.getAllByRole('link', { name: 'Access' })[0]).toHaveAttribute('href', '#access');
+  });
+
+  it('shows mobile nav links and closes menu after tapping a section link', () => {
+    render(<LandingPage />);
+
+    const openMenuButton = screen.getByRole('button', { name: /open menu/i });
+    fireEvent.click(openMenuButton);
+
+    const whyMobileLinks = screen.getAllByRole('link', { name: 'Why' });
+    expect(whyMobileLinks.length).toBeGreaterThan(1);
+
+    const whyMobileLink = whyMobileLinks[1];
+    expect(whyMobileLink).toHaveAttribute('href', '#why');
+
+    fireEvent.click(whyMobileLink);
+    expect(screen.getByRole('button', { name: /open menu/i })).toBeInTheDocument();
+  });
+
+  it('renders footer links and core labels', () => {
     render(<LandingPage />);
     expect(document.body).toHaveTextContent('Sacrament Registry');
     expect(document.body).toHaveTextContent(/Sacramental Record Management System/i);
-  });
+    expect(document.body).not.toHaveTextContent(/Support: support@sacramentregistry.com/i);
 
-  it('shows Privacy Notice link in footer', () => {
-    render(<LandingPage />);
     const privacyLink = screen.getByRole('link', { name: 'Privacy Notice' });
     expect(privacyLink).toHaveAttribute('href', '/privacy');
+
+    const dataProtectionLink = screen.getByRole('link', { name: 'Data Protection & Trust' });
+    expect(dataProtectionLink).toHaveAttribute('href', '/data-protection');
+
+    const termsLink = screen.getByRole('link', { name: 'Terms of Use' });
+    expect(termsLink).toHaveAttribute('href', '/terms-of-use');
+
+    const supportLinks = screen.getAllByRole('link', { name: 'Support' });
+    expect(supportLinks[0]).toHaveAttribute('href', 'mailto:support@sacramentregistry.com');
+
+    const requestAccessFooter = screen.getAllByRole('link', { name: 'Request Access for Your Parish' });
+    expect(requestAccessFooter.length).toBeGreaterThan(0);
+    expect(requestAccessFooter[0]).toHaveAttribute('href', requestAccessHref);
+  });
+
+  it('keeps access section CTAs wired correctly', () => {
+    render(<LandingPage />);
+
+    const signInLinks = screen.getAllByRole('link', { name: 'Sign in' });
+    expect(signInLinks.length).toBeGreaterThan(0);
+    signInLinks.forEach((link) => {
+      expect(link).toHaveAttribute('href', '/login');
+    });
+
+    const requestAccessLinks = screen.getAllByRole('link', { name: 'Request Access for Your Parish' });
+    expect(requestAccessLinks.length).toBeGreaterThan(0);
+    requestAccessLinks.forEach((link) => {
+      expect(link).toHaveAttribute('href', requestAccessHref);
+    });
+
+    expect(requestAccessLinks[0]).toHaveAttribute('href', requestAccessHref);
+  });
+
+  it('shows secondary direct-email option with info mailbox', () => {
+    render(<LandingPage />);
+
+    expect(screen.getByText(/Or email us directly at/i)).toBeInTheDocument();
+    const infoEmailLinks = screen.getAllByRole('link', { name: 'info@sacramentregistry.com' });
+    expect(infoEmailLinks.length).toBeGreaterThan(0);
+    expect(infoEmailLinks[0]).toHaveAttribute('href', 'mailto:info@sacramentregistry.com');
   });
 
   it('when authenticated redirects to /dashboard', async () => {

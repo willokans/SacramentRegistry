@@ -15,4 +15,15 @@ public class DioceseResponse {
     private String dioceseName;
     private String code;
     private String description;
+    private String countryCode;
+    private String countryName;
+    private String ordinaryName;
+    private String ordinaryTitle;
+
+    public DioceseResponse(Long id, String dioceseName, String code, String description) {
+        this.id = id;
+        this.dioceseName = dioceseName;
+        this.code = code;
+        this.description = description;
+    }
 }

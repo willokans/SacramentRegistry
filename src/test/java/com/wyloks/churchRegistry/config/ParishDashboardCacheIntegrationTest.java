@@ -32,7 +32,7 @@ class ParishDashboardCacheIntegrationTest {
 
     @Test
     void getDashboard_populatesCache_andSecondCallHitsCache() throws Exception {
-        String token = loginAndGetToken("admin", "password");
+        String token = loginAndGetToken("superadmin", "password");
         long parishId = getOrCreateParishId(token);
 
         org.springframework.cache.Cache dashboardCache = cacheManager.getCache(CacheConfig.CACHE_PARISH_DASHBOARD);
@@ -64,7 +64,7 @@ class ParishDashboardCacheIntegrationTest {
 
     @Test
     void getDashboard_differentParishIdsHaveSeparateCacheEntries() throws Exception {
-        String token = loginAndGetToken("admin", "password");
+        String token = loginAndGetToken("superadmin", "password");
         long parishId1 = getOrCreateParishId(token);
         long parishId2 = getOrCreateSecondParishId(token, parishId1);
 
@@ -91,7 +91,7 @@ class ParishDashboardCacheIntegrationTest {
 
     @Test
     void getDashboardCounts_returnsBatchCounts() throws Exception {
-        String token = loginAndGetToken("admin", "password");
+        String token = loginAndGetToken("superadmin", "password");
         long parishId = getOrCreateParishId(token);
 
         mvc.perform(get("/api/parishes/{parishId}/dashboard-counts", parishId)
@@ -106,7 +106,7 @@ class ParishDashboardCacheIntegrationTest {
 
     @Test
     void getDashboard_returnsExpectedStructure() throws Exception {
-        String token = loginAndGetToken("admin", "password");
+        String token = loginAndGetToken("superadmin", "password");
         long parishId = getOrCreateParishId(token);
 
         String response = mvc.perform(get("/api/parishes/{parishId}/dashboard", parishId)

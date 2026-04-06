@@ -3,6 +3,8 @@ package com.wyloks.churchRegistry.web;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -32,7 +34,21 @@ class AdminUserAccessSecurityIntegrationTest {
 
     @Test
     void adminUser_canAccessAdminUserParishEndpoints() throws Exception {
+        String superToken = loginAndGetToken("superadmin", "password");
         String adminToken = loginAndGetToken("admin", "password");
+
+        List<Long> parishIds = ensureAtLeastTwoParishIds();
+        Long parishId = parishIds.get(0);
+        JsonNode allUsers = listUsersWithParishAccess(superToken);
+        Long adminUserId = findUserIdByUsername(allUsers, "admin");
+        String assignAdmin = objectMapper.writeValueAsString(
+                new ReplaceUserParishAccessPayload(Set.of(parishId), parishId)
+        );
+        mvc.perform(put("/api/admin/users/{id}/parish-access", adminUserId)
+                        .header("Authorization", "Bearer " + superToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(assignAdmin))
+                .andExpect(status().isOk());
 
         String listResponse = mvc.perform(get("/api/admin/users/parish-access")
                         .header("Authorization", "Bearer " + adminToken))
@@ -41,7 +57,9 @@ class AdminUserAccessSecurityIntegrationTest {
                 .getResponse()
                 .getContentAsString();
 
-        Long firstUserId = objectMapper.readTree(listResponse).get(0).get("userId").asLong();
+        JsonNode listed = objectMapper.readTree(listResponse);
+        assertFalse(listed.isEmpty());
+        Long firstUserId = listed.get(0).get("userId").asLong();
         mvc.perform(get("/api/admin/users/{id}/parish-access", firstUserId)
                         .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk());
@@ -99,12 +117,12 @@ class AdminUserAccessSecurityIntegrationTest {
     }
 
     @Test
-    void adminUser_canReplaceUserParishAccess_withMultipleAndSingleParishes() throws Exception {
-        String adminToken = loginAndGetToken("admin", "password");
-        JsonNode users = listUsersWithParishAccess(adminToken);
+    void superAdminUser_canReplaceUserParishAccess_withMultipleAndSingleParishes() throws Exception {
+        String superToken = loginAndGetToken("superadmin", "password");
+        JsonNode users = listUsersWithParishAccess(superToken);
         Long targetUserId = users.get(0).get("userId").asLong();
 
-        List<Long> availableParishIds = ensureAtLeastTwoParishIds(adminToken);
+        List<Long> availableParishIds = ensureAtLeastTwoParishIds();
 
         Long firstParishId = availableParishIds.get(0);
         Long secondParishId = availableParishIds.get(1);
@@ -114,7 +132,7 @@ class AdminUserAccessSecurityIntegrationTest {
         );
 
         mvc.perform(put("/api/admin/users/{id}/parish-access", targetUserId)
-                        .header("Authorization", "Bearer " + adminToken)
+                        .header("Authorization", "Bearer " + superToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(multiParishRequest))
                 .andExpect(status().isOk())
@@ -127,7 +145,7 @@ class AdminUserAccessSecurityIntegrationTest {
         );
 
         mvc.perform(put("/api/admin/users/{id}/parish-access", targetUserId)
-                        .header("Authorization", "Bearer " + adminToken)
+                        .header("Authorization", "Bearer " + superToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(singleParishRequest))
                 .andExpect(status().isOk())
@@ -139,11 +157,11 @@ class AdminUserAccessSecurityIntegrationTest {
 
     @Test
     void nonAdminUser_cannotReplaceUserParishAccess() throws Exception {
-        String adminToken = loginAndGetToken("admin", "password");
+        String superToken = loginAndGetToken("superadmin", "password");
         String priestToken = loginAndGetToken("priest@church_registry.com", "password");
-        JsonNode users = listUsersWithParishAccess(adminToken);
+        JsonNode users = listUsersWithParishAccess(superToken);
         Long targetUserId = users.get(0).get("userId").asLong();
-        List<Long> availableParishIds = ensureAtLeastTwoParishIds(adminToken);
+        List<Long> availableParishIds = ensureAtLeastTwoParishIds();
         Long parishId = availableParishIds.get(0);
 
         String request = objectMapper.writeValueAsString(
@@ -162,22 +180,22 @@ class AdminUserAccessSecurityIntegrationTest {
 
     @Test
     void nonAdminUser_dioceseAndParishListings_areScopedByAssignedParishAccess() throws Exception {
-        String adminToken = loginAndGetToken("admin", "password");
+        String superToken = loginAndGetToken("superadmin", "password");
 
         long seed = System.nanoTime();
-        Long accessibleDioceseId = createDiocese(adminToken, "Scoped Diocese A " + seed, "SDA" + (seed % 10000));
-        Long blockedDioceseId = createDiocese(adminToken, "Scoped Diocese B " + seed, "SDB" + (seed % 10000));
-        Long accessibleParishId = createParish(adminToken, accessibleDioceseId, "Scoped Parish A " + seed);
-        createParish(adminToken, blockedDioceseId, "Scoped Parish B " + seed);
+        Long accessibleDioceseId = createDiocese(superToken, "Scoped Diocese A " + seed, "SDA" + (seed % 10000));
+        Long blockedDioceseId = createDiocese(superToken, "Scoped Diocese B " + seed, "SDB" + (seed % 10000));
+        Long accessibleParishId = createParish(superToken, accessibleDioceseId, "Scoped Parish A " + seed);
+        createParish(superToken, blockedDioceseId, "Scoped Parish B " + seed);
 
-        JsonNode users = listUsersWithParishAccess(adminToken);
+        JsonNode users = listUsersWithParishAccess(superToken);
         Long priestUserId = findUserIdByUsername(users, "priest@church_registry.com");
         String replaceRequest = objectMapper.writeValueAsString(
                 new ReplaceUserParishAccessPayload(Set.of(accessibleParishId), accessibleParishId)
         );
 
         mvc.perform(put("/api/admin/users/{id}/parish-access", priestUserId)
-                        .header("Authorization", "Bearer " + adminToken)
+                        .header("Authorization", "Bearer " + superToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(replaceRequest))
                 .andExpect(status().isOk())
@@ -204,6 +222,37 @@ class AdminUserAccessSecurityIntegrationTest {
                         .header("Authorization", "Bearer " + priestToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void nonAdminUser_cannotCreateDioceseOrParish() throws Exception {
+        String superToken = loginAndGetToken("superadmin", "password");
+        String priestToken = loginAndGetToken("priest@church_registry.com", "password");
+
+        String dioceseRequest = objectMapper.writeValueAsString(
+                new DiocesePayload("Unauthorized Diocese " + System.nanoTime(), "UDX", "Should be forbidden")
+        );
+        mvc.perform(post("/api/dioceses")
+                        .header("Authorization", "Bearer " + priestToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(dioceseRequest))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.error").value("Forbidden"))
+                .andExpect(jsonPath("$.message").isString());
+
+        Long existingDioceseId = createDiocese(superToken, "Authorized Diocese " + System.nanoTime(), "ADX");
+        String parishRequest = objectMapper.writeValueAsString(
+                new ParishPayload("Unauthorized Parish " + System.nanoTime(), existingDioceseId, "Should be forbidden")
+        );
+        mvc.perform(post("/api/parishes")
+                        .header("Authorization", "Bearer " + priestToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(parishRequest))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.error").value("Forbidden"))
+                .andExpect(jsonPath("$.message").isString());
     }
 
     private String loginAndGetToken(String username, String password) throws Exception {
@@ -267,22 +316,22 @@ class AdminUserAccessSecurityIntegrationTest {
         return new ArrayList<>(ids);
     }
 
-    private List<Long> ensureAtLeastTwoParishIds(String token) throws Exception {
+    private List<Long> ensureAtLeastTwoParishIds() throws Exception {
+        String superToken = loginAndGetToken("superadmin", "password");
         try {
-            List<Long> existingParishIds = listAllParishIds(token);
+            List<Long> existingParishIds = listAllParishIds(superToken);
             if (existingParishIds.size() >= 2) {
                 return existingParishIds;
             }
         } catch (IllegalStateException ignored) {
             // Create fixture data below when there are no existing parishes.
         }
-
         long seed = System.nanoTime();
         String dioceseRequest = objectMapper.writeValueAsString(
                 new DiocesePayload("Integration Diocese " + seed, "INT" + (seed % 10000), "Integration test diocese")
         );
         String dioceseResponse = mvc.perform(post("/api/dioceses")
-                        .header("Authorization", "Bearer " + token)
+                        .header("Authorization", "Bearer " + superToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(dioceseRequest))
                 .andExpect(status().isCreated())
@@ -295,7 +344,7 @@ class AdminUserAccessSecurityIntegrationTest {
                 new ParishPayload("Integration Parish A " + seed, dioceseId, "Integration test parish A")
         );
         mvc.perform(post("/api/parishes")
-                        .header("Authorization", "Bearer " + token)
+                        .header("Authorization", "Bearer " + superToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(firstParishRequest))
                 .andExpect(status().isCreated());
@@ -304,12 +353,12 @@ class AdminUserAccessSecurityIntegrationTest {
                 new ParishPayload("Integration Parish B " + seed, dioceseId, "Integration test parish B")
         );
         mvc.perform(post("/api/parishes")
-                        .header("Authorization", "Bearer " + token)
+                        .header("Authorization", "Bearer " + superToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(secondParishRequest))
                 .andExpect(status().isCreated());
 
-        return listAllParishIds(token);
+        return listAllParishIds(superToken);
     }
 
     private Long createDiocese(String token, String name, String code) throws Exception {

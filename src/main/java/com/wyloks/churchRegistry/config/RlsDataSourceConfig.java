@@ -15,8 +15,9 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 /**
- * Wraps the DataSource to set PostgreSQL session variables (app.parish_ids, app.is_admin)
- * for RLS policies when a connection is obtained. Only active when RLS is enabled.
+ * Wraps the DataSource to set PostgreSQL session variables {@code app.parish_ids} and {@code app.is_admin}
+ * for RLS policies when a connection is obtained. {@code app.is_admin} is {@code true} only for
+ * {@code SUPER_ADMIN}; parish {@code ADMIN} relies on {@code app.parish_ids} only. Only active when RLS is enabled.
  * Creates an explicit raw DataSource to avoid circular reference with Liquibase/JPA.
  * Ensures PgBouncer-compatible URL params (preferQueryMode=simple, prepareThreshold=0).
  */

@@ -24,6 +24,7 @@ public class ParishController {
 
     @GetMapping("/{id}")
     public ResponseEntity<ParishResponse> getById(@PathVariable Long id) {
+        authorizationService.requireParishAccess(id);
         return parishService.findById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());

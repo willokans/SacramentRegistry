@@ -1,0 +1,110 @@
+databaseChangeLog:
+  - changeSet:
+      id: 1
+      author: will_okanumeh
+      changes:
+        - createTable:
+            tableName: user_invitation
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: app_user_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_user_invitation_app_user_id
+                    referencedTableName: app_user
+                    referencedColumnNames: id
+              - column:
+                  name: token_hash
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uk_user_invitation_token_hash
+              - column:
+                  name: invited_email
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: varchar(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: expires_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+              - column:
+                  name: accepted_at
+                  type: timestamp
+                  constraints:
+                    nullable: true
+              - column:
+                  name: revoked_at
+                  type: timestamp
+                  constraints:
+                    nullable: true
+              - column:
+                  name: created_by_user_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_user_invitation_created_by_user_id
+                    referencedTableName: app_user
+                    referencedColumnNames: id
+              - column:
+                  name: created_at
+                  type: timestamp
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamp
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - createIndex:
+            indexName: idx_user_invitation_app_user_id
+            tableName: user_invitation
+            columns:
+              - column:
+                  name: app_user_id
+        - createIndex:
+            indexName: idx_user_invitation_status_expires_at
+            tableName: user_invitation
+            columns:
+              - column:
+                  name: status
+              - column:
+                  name: expires_at
+        - sql:
+            sql: |
+              ALTER TABLE user_invitation
+              ADD CONSTRAINT chk_user_invitation_status
+              CHECK (status IN ('PENDING', 'ACCEPTED', 'EXPIRED', 'REVOKED'));
+
+  - changeSet:
+      id: 2
+      author: will_okanumeh
+      preConditions:
+        - onFail: MARK_RAN
+        - dbms:
+            type: postgresql
+      changes:
+        - sql:
+            sql: |
+              CREATE UNIQUE INDEX IF NOT EXISTS uidx_diocese_normalized_name
+                ON diocese (LOWER(BTRIM(diocese_name)));
+
+              CREATE UNIQUE INDEX IF NOT EXISTS uidx_parish_diocese_normalized_name
+                ON parish (diocese_id, LOWER(BTRIM(parish_name)));

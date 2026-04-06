@@ -1,6 +1,7 @@
 package com.wyloks.churchRegistry.service;
 
 import com.wyloks.churchRegistry.dto.ForgotPasswordResponse;
+import com.wyloks.churchRegistry.dto.InviteProfileResponse;
 import com.wyloks.churchRegistry.dto.LoginResponse;
 
 public interface AuthService {
@@ -38,4 +39,12 @@ public interface AuthService {
      * Invalidates the token after use. Throws BadCredentialsException if token is invalid or expired.
      */
     void resetPasswordByToken(String token, String newPassword);
+
+    /**
+     * Accepts an invitation token, sets password/profile fields and consumes the invitation.
+     */
+    void acceptInvite(String token, String newPassword, String firstName, String lastName, String title,
+                      String acceptedIpAddress, String acceptedUserAgent);
+
+    InviteProfileResponse getInviteProfile(String token);
 }

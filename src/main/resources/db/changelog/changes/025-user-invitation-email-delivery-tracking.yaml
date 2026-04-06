@@ -1,0 +1,34 @@
+databaseChangeLog:
+  - changeSet:
+      id: 1
+      author: will_okanumeh
+      changes:
+        - addColumn:
+            tableName: user_invitation
+            columns:
+              - column:
+                  name: email_delivery_status
+                  type: varchar(20)
+                  defaultValue: PENDING
+                  constraints:
+                    nullable: false
+              - column:
+                  name: email_sent_at
+                  type: timestamp
+                  constraints:
+                    nullable: true
+              - column:
+                  name: last_email_attempt_at
+                  type: timestamp
+                  constraints:
+                    nullable: true
+              - column:
+                  name: last_email_error
+                  type: varchar(1024)
+                  constraints:
+                    nullable: true
+        - sql:
+            sql: |
+              ALTER TABLE user_invitation
+              ADD CONSTRAINT chk_user_invitation_email_delivery_status
+              CHECK (email_delivery_status IN ('PENDING', 'SENT', 'FAILED'));

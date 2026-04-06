@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { ParishProvider } from '@/context/ParishContext';
+import IdleSessionManager from '@/components/IdleSessionManager';
 import { PWARegister } from '@/components/PWARegister';
 import './globals.css';
 
@@ -33,6 +34,7 @@ export default function RootLayout({
       </head>
       <body>
         <ParishProvider>
+          <IdleSessionManager />
           <PWARegister />
           {children}
         </ParishProvider>

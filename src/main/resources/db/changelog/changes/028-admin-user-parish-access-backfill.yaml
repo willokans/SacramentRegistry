@@ -1,0 +1,43 @@
+databaseChangeLog:
+  - changeSet:
+      id: 028-admin-user-parish-access-backfill
+      author: churchRegistry
+      validCheckSum:
+        - 9:611bb773d92f99cf6ab469d07dd01f5c
+      preConditions:
+        - onFail: MARK_RAN
+        - onError: MARK_RAN
+        - tableExists:
+            tableName: parish
+        - tableExists:
+            tableName: app_user_parish_access
+      comment: |
+        Give parish-scoped ADMIN users a default parish (Holy Family) so JWT parish scope and mutual-visibility rules work with seeded data. Uses portable SQL (H2 + PostgreSQL).
+        See docs/PARISH_SCOPED_ADMIN_RELEASE.md for breaking-change summary, production backfill expectations, and JWT re-login after parish_access changes.
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO app_user_parish_access (user_id, parish_id)
+              SELECT u.id, p.id
+              FROM app_user u
+              CROSS JOIN (
+                SELECT id FROM parish
+                WHERE LOWER(parish_name) LIKE LOWER('Holy Family Catholic Church%')
+                ORDER BY id
+                LIMIT 1
+              ) p
+              WHERE UPPER(TRIM(u.role)) = 'ADMIN'
+                AND NOT EXISTS (
+                  SELECT 1 FROM app_user_parish_access a
+                  WHERE a.user_id = u.id AND a.parish_id = p.id
+                );
+
+              UPDATE app_user
+              SET parish_id = (
+                SELECT id FROM parish
+                WHERE LOWER(parish_name) LIKE LOWER('Holy Family Catholic Church%')
+                ORDER BY id
+                LIMIT 1
+              )
+              WHERE UPPER(TRIM(role)) = 'ADMIN'
+                AND parish_id IS NULL;

@@ -1,6 +1,7 @@
 package com.wyloks.churchRegistry.service.impl;
 
 import com.wyloks.churchRegistry.dto.ForgotPasswordResponse;
+import com.wyloks.churchRegistry.dto.InviteProfileResponse;
 import com.wyloks.churchRegistry.dto.LoginResponse;
 import com.wyloks.churchRegistry.entity.AppUser;
 import com.wyloks.churchRegistry.entity.PasswordResetToken;
@@ -10,6 +11,7 @@ import com.wyloks.churchRegistry.repository.PasswordResetTokenRepository;
 import com.wyloks.churchRegistry.repository.RefreshTokenRepository;
 import com.wyloks.churchRegistry.security.JwtService;
 import com.wyloks.churchRegistry.service.AuthService;
+import com.wyloks.churchRegistry.service.UserInvitationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
@@ -33,6 +35,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final UserInvitationService userInvitationService;
 
     @Value("${app.jwt.refresh-expiration-ms:604800000}")
     private long refreshExpirationMs;
@@ -181,5 +184,20 @@ public class AuthServiceImpl implements AuthService {
         user.setMustResetPassword(false);
         appUserRepository.save(user);
         passwordResetTokenRepository.delete(token);
+    }
+
+    @Override
+    @Transactional
+    public void acceptInvite(String token, String newPassword, String firstName, String lastName, String title,
+                             String acceptedIpAddress, String acceptedUserAgent) {
+        userInvitationService.acceptInvitation(
+                token, newPassword, firstName, lastName, title, acceptedIpAddress, acceptedUserAgent
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public InviteProfileResponse getInviteProfile(String token) {
+        return userInvitationService.getInvitationProfile(token);
     }
 }

@@ -8,8 +8,7 @@ import MarriageRequirementsSettingsPage from '@/app/settings/marriage-requiremen
 import {
   getStoredUser,
   getStoredToken,
-  fetchDioceses,
-  fetchParishes,
+  fetchDiocesesWithParishes,
   fetchParishMarriageRequirements,
   patchParishMarriageRequirements,
 } from '@/lib/api';
@@ -25,8 +24,7 @@ jest.mock('@/lib/api', () => ({
   getStoredUser: jest.fn(),
   getStoredToken: jest.fn(),
   clearAuth: jest.fn(),
-  fetchDioceses: jest.fn(),
-  fetchParishes: jest.fn(),
+  fetchDiocesesWithParishes: jest.fn(),
   fetchParishMarriageRequirements: jest.fn(),
   patchParishMarriageRequirements: jest.fn(),
 }));
@@ -53,9 +51,14 @@ describe('Marriage requirements settings page', () => {
       parishId: null,
       parishes: [],
     });
-    (fetchDioceses as jest.Mock).mockResolvedValue([{ id: 1, name: 'Enugu Diocese' }]);
-    (fetchParishes as jest.Mock).mockResolvedValue([
-      { id: 10, parishName: 'St Mary', dioceseId: 1, requireMarriageConfirmation: true },
+    (fetchDiocesesWithParishes as jest.Mock).mockResolvedValue([
+      {
+        id: 1,
+        dioceseName: 'Enugu Diocese',
+        parishes: [
+          { id: 10, parishName: 'St Mary', dioceseId: 1, requireMarriageConfirmation: true },
+        ],
+      },
     ]);
     (fetchParishMarriageRequirements as jest.Mock).mockResolvedValue({
       parishId: 10,
@@ -82,13 +85,11 @@ describe('Marriage requirements settings page', () => {
     render(<MarriageRequirementsSettingsPage />);
 
     await waitFor(() => {
-      expect(fetchDioceses).toHaveBeenCalled();
-    });
-    await waitFor(() => {
-      expect(fetchParishes).toHaveBeenCalledWith(1);
+      expect(fetchDiocesesWithParishes).toHaveBeenCalled();
     });
 
-    await user.selectOptions(screen.getByLabelText(/parish/i), '10');
+    await user.type(screen.getByLabelText(/parish/i), 'St Mary');
+    await user.click(screen.getByRole('button', { name: /st mary/i }));
 
     await waitFor(() => {
       expect(fetchParishMarriageRequirements).toHaveBeenCalledWith(10);
@@ -105,7 +106,8 @@ describe('Marriage requirements settings page', () => {
       expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
     });
 
-    await user.selectOptions(screen.getByLabelText(/parish/i), '10');
+    await user.type(screen.getByLabelText(/parish/i), 'St Mary');
+    await user.click(screen.getByRole('button', { name: /st mary/i }));
     await waitFor(() => {
       expect(screen.getByRole('checkbox')).toBeInTheDocument();
     });

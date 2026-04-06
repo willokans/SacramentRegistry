@@ -1,0 +1,48 @@
+databaseChangeLog:
+  - changeSet:
+      id: 1
+      author: will_okanumeh
+      validCheckSum:
+        - 9:e21a09b0edfd59376f93b0a76500b7a5
+      changes:
+        - sql:
+            sql: |
+              ALTER TABLE baptism
+              ADD COLUMN IF NOT EXISTS birth_certificate_current_path TEXT;
+
+              CREATE TABLE IF NOT EXISTS baptism_document_version (
+                id BIGSERIAL PRIMARY KEY,
+                baptism_id BIGINT NOT NULL REFERENCES baptism(id) ON DELETE CASCADE,
+                document_type VARCHAR(50) NOT NULL,
+                storage_path TEXT NOT NULL,
+                original_filename VARCHAR(255) NOT NULL,
+                content_type VARCHAR(255) NOT NULL,
+                size_bytes BIGINT NOT NULL,
+                uploaded_by BIGINT REFERENCES app_user(id) ON DELETE SET NULL,
+                uploaded_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                is_current BOOLEAN NOT NULL DEFAULT FALSE,
+                CONSTRAINT chk_baptism_document_version_size CHECK (size_bytes > 0),
+                CONSTRAINT chk_baptism_document_version_type CHECK (document_type = 'BIRTH_CERTIFICATE')
+              );
+
+              CREATE INDEX IF NOT EXISTS idx_baptism_document_version_baptism_id
+                ON baptism_document_version(baptism_id);
+
+              CREATE INDEX IF NOT EXISTS idx_baptism_document_version_uploaded_at
+                ON baptism_document_version(uploaded_at DESC);
+
+              CREATE UNIQUE INDEX IF NOT EXISTS uidx_baptism_document_version_storage_path
+                ON baptism_document_version(storage_path);
+  - changeSet:
+      id: 2
+      author: will_okanumeh
+      preConditions:
+        - onFail: MARK_RAN
+        - dbms:
+            type: postgresql
+      changes:
+        - sql:
+            sql: |
+              CREATE UNIQUE INDEX IF NOT EXISTS uidx_baptism_document_version_current
+                ON baptism_document_version(baptism_id, document_type)
+                WHERE is_current = TRUE;

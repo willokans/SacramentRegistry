@@ -20,17 +20,22 @@ const mockPush = jest.fn();
 
 describe('Login page', () => {
   let locationHref: string;
+  let locationSearch: string;
   beforeEach(() => {
     mockPush.mockClear();
     localStorage.clear();
     locationHref = '';
+    locationSearch = '';
     Object.defineProperty(window, 'location', {
       value: {
         get href() {
           return locationHref;
         },
-        set href(v: string) {
-          locationHref = v;
+        set href(v) {
+          locationHref = String(v);
+        },
+        get search() {
+          return locationSearch;
         },
         assign: jest.fn(),
       },
@@ -49,6 +54,18 @@ describe('Login page', () => {
     render(<LoginPage />);
     const privacyLink = screen.getByRole('link', { name: 'Privacy Notice' });
     expect(privacyLink).toHaveAttribute('href', '/privacy');
+  });
+
+  it('shows a Terms of Use link', () => {
+    render(<LoginPage />);
+    const termsLink = screen.getByRole('link', { name: 'Terms of Use' });
+    expect(termsLink).toHaveAttribute('href', '/terms-of-use');
+  });
+
+  it('shows inactivity sign-out message when reason=idle', () => {
+    locationSearch = '?reason=idle';
+    render(<LoginPage />);
+    expect(screen.getByText(/signed out after two hours without activity/i)).toBeInTheDocument();
   });
 
   it('on successful login stores token and redirects to dashboard', async () => {
@@ -83,6 +100,7 @@ describe('Login page', () => {
     await waitFor(() => {
       expect(localStorage.getItem('church_registry_token')).toBe('jwt-123');
       expect(localStorage.getItem('church_registry_refresh_token')).toBe('refresh-456');
+      expect(localStorage.getItem('church_registry_last_activity_ms')).toBeTruthy();
       expect(locationHref).toBe('/dashboard');
     });
   });

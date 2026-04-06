@@ -19,7 +19,7 @@ const SECTIONS = [
 export default function HelpPage() {
   return (
     <AuthenticatedLayout>
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="space-y-6">
         <h1 className="text-2xl md:text-3xl font-serif font-semibold text-sancta-maroon">
           Help Center
         </h1>
@@ -283,13 +283,19 @@ export default function HelpPage() {
             Contact your parish administrator for assistance with access, data questions, or technical issues.
           </p>
           <p className="mt-3 text-gray-600 text-sm leading-relaxed">
-            For how personal data is handled, review our privacy notice.
+            For how personal data is handled, review our privacy notice. For rules on using the platform, see our terms of use.
           </p>
           <Link
             href="/privacy"
             className="mt-1 inline-block text-sm font-medium text-sancta-maroon hover:underline"
           >
             Read Privacy Notice →
+          </Link>
+          <Link
+            href="/terms-of-use"
+            className="mt-2 inline-block text-sm font-medium text-sancta-maroon hover:underline"
+          >
+            Terms of Use →
           </Link>
           <a
             href="mailto:support@sacramentregistry.com"
