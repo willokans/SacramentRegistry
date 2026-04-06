@@ -1,4 +1,5 @@
 import { getIsOnline } from '@/lib/offline/network';
+import { parseErrorResponse } from '@/lib/parseErrorResponse';
 import {
   loadCachedBaptisms,
   loadCachedCommunions,
@@ -25,16 +26,54 @@ function getBaseUrl(): string {
   }
 }
 
+/** Maps network / configuration errors from fetch to a message suitable for the sign-in form. */
+function loginNetworkUserMessage(error: unknown): string {
+  const msg = error instanceof Error ? error.message : String(error);
+  const lower = msg.toLowerCase();
+  if (
+    msg === 'Failed to fetch' ||
+    lower.includes('networkerror') ||
+    lower.includes('load failed') ||
+    lower.includes('network request failed') ||
+    lower.includes('fetch failed')
+  ) {
+    return 'We could not reach the server. Check your internet connection and try again. If this keeps happening, contact your parish administrator.';
+  }
+  if (msg.includes('NEXT_PUBLIC_API_URL') || msg.includes('Missing NEXT_PUBLIC_API_URL')) {
+    return 'This site is not fully set up for sign-in yet. Please contact support.';
+  }
+  return 'Sign-in did not complete. Please try again.';
+}
+
 export async function login(username: string, password: string) {
-  const res = await fetchWithRetry(`${getBaseUrl()}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
-  });
+  let res: Response;
+  try {
+    res = await fetchWithRetry(`${getBaseUrl()}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+  } catch (e) {
+    throw new Error(loginNetworkUserMessage(e));
+  }
   if (!res.ok) {
-    if (res.status === 401) throw new Error('Invalid credentials');
     const text = await res.text();
-    throw new Error(text || 'Login failed');
+    if (res.status === 401) {
+      throw new Error(
+        'The email or password you entered is not correct. Please try again, or use Forgot password if you need help.',
+      );
+    }
+    if (res.status === 429) {
+      const detail = parseErrorResponse(text, '').trim();
+      throw new Error(
+        detail ||
+          'Too many sign-in attempts from this network. Please wait about 15 minutes, then try again.',
+      );
+    }
+    if (res.status >= 500) {
+      throw new Error('The sign-in service is temporarily unavailable. Please try again in a few minutes.');
+    }
+    throw new Error(parseErrorResponse(text, 'Sign-in did not complete. Please try again.'));
   }
   return res.json();
 }
@@ -344,18 +383,6 @@ function withLatestAuthHeader(init?: RequestInit): RequestInit | undefined {
   const headers = new Headers(init.headers ?? {});
   headers.set('Authorization', `Bearer ${token}`);
   return { ...init, headers };
-}
-
-/** Parse error response text; prefer 'error' or 'message' from JSON when present. */
-function parseErrorResponse(text: string, fallback: string): string {
-  try {
-    const j = JSON.parse(text) as { detail?: string; message?: string; error?: string };
-    // Prefer detail (RFC 9457) or message (specific reason); error is often generic e.g. "Bad Request"
-    const msg = (j.detail ?? j.message ?? j.error ?? fallback).trim();
-    return msg || fallback;
-  } catch {
-    return text.trim() || fallback;
-  }
 }
 
 export interface BaptismResponse {

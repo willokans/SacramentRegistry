@@ -107,7 +107,11 @@ describe('Login page', () => {
 
   it('on failed login shows error and does not redirect', async () => {
     const user = userEvent.setup();
-    global.fetch = jest.fn().mockResolvedValueOnce({ ok: false, status: 401 });
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      text: () => Promise.resolve(''),
+    });
 
     render(<LoginPage />);
     await user.type(screen.getByLabelText(/username/i), 'admin');
@@ -115,7 +119,9 @@ describe('Login page', () => {
     await user.click(screen.getByRole('button', { name: /sign in|login/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/invalid credentials|login failed/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/email or password you entered is not correct|invalid credentials|login failed/i),
+      ).toBeInTheDocument();
     });
     expect(mockPush).not.toHaveBeenCalled();
   });
