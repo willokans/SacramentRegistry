@@ -1,3 +1,4 @@
+import { clearRememberDevicePreference } from '@/lib/authIdle';
 import { getIsOnline } from '@/lib/offline/network';
 import { parseErrorResponse } from '@/lib/parseErrorResponse';
 import {
@@ -60,7 +61,7 @@ export async function login(username: string, password: string) {
     const text = await res.text();
     if (res.status === 401) {
       throw new Error(
-        'The email or password you entered is not correct. Please try again, or use Forgot password if you need help.',
+        'The username or password you entered is not correct. Please try again, or use Forgot password if you need help.',
       );
     }
     if (res.status === 429) {
@@ -139,10 +140,19 @@ export function clearAuth() {
   localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
   localStorage.removeItem(USER_STORAGE_KEY);
   localStorage.removeItem(AUTH_LAST_ACTIVITY_KEY);
+  clearRememberDevicePreference();
 }
 
-/** Request password reset by email or username. Returns token (MVP: no email sent; share token with user). Uses Next.js proxy to avoid CORS. */
-export async function forgotPassword(identifier: string): Promise<{ token: string; expiresAt: string }> {
+/** Default copy when the API returns 200 without a usable `message` field (matches server ForgotPasswordResponse.MESSAGE). */
+export const FORGOT_PASSWORD_SUCCESS_MESSAGE =
+  "If an account exists for this username, we've sent password reset instructions to the email on file.";
+
+export interface ForgotPasswordResponse {
+  message: string;
+}
+
+/** Request password reset by username. Always 200 + generic message when identifier is valid; reset link is only sent by email. Uses Next.js proxy to avoid CORS. */
+export async function forgotPassword(identifier: string): Promise<ForgotPasswordResponse> {
   const res = await fetchWithRetry('/api/auth/forgot-password', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -150,9 +160,27 @@ export async function forgotPassword(identifier: string): Promise<{ token: strin
   });
   if (!res.ok) {
     const text = await res.text();
+    if (res.status === 429) {
+      const detail = parseErrorResponse(text, '').trim();
+      throw new Error(
+        detail ||
+          'Too many password reset requests from this network. Please wait about 15 minutes, then try again.',
+      );
+    }
     throw new Error(parseErrorResponse(text, 'Failed to request password reset'));
   }
-  return res.json();
+  let payload: unknown;
+  try {
+    payload = await res.json();
+  } catch {
+    return { message: FORGOT_PASSWORD_SUCCESS_MESSAGE };
+  }
+  const message =
+    typeof (payload as { message?: unknown })?.message === 'string' &&
+    String((payload as { message: string }).message).trim() !== ''
+      ? String((payload as { message: string }).message)
+      : FORGOT_PASSWORD_SUCCESS_MESSAGE;
+  return { message };
 }
 
 /** Reset password using token from forgot-password. No JWT required. Uses Next.js proxy. */

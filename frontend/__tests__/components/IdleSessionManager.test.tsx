@@ -3,7 +3,7 @@
  */
 import { render, act } from '@testing-library/react';
 import IdleSessionManager from '@/components/IdleSessionManager';
-import { IDLE_SESSION_MS } from '@/lib/authIdle';
+import { IDLE_SESSION_MS, REMEMBER_DEVICE_STORAGE_KEY } from '@/lib/authIdle';
 
 const mockReplace = jest.fn();
 
@@ -43,6 +43,7 @@ describe('IdleSessionManager', () => {
     touchAuthActivityMock.mockClear();
     readAuthLastActivityMsMock.mockReset();
     getStoredTokenMock.mockReturnValue('jwt');
+    localStorage.removeItem(REMEMBER_DEVICE_STORAGE_KEY);
   });
 
   afterEach(() => {
@@ -62,6 +63,14 @@ describe('IdleSessionManager', () => {
     render(<IdleSessionManager />);
     expect(clearAuthMock).toHaveBeenCalled();
     expect(mockReplace).toHaveBeenCalledWith('/login?reason=idle');
+  });
+
+  it('does not sign out when idle beyond default limit if remember device is enabled', () => {
+    localStorage.setItem(REMEMBER_DEVICE_STORAGE_KEY, '1');
+    const stale = Date.now() - IDLE_SESSION_MS - 1000;
+    readAuthLastActivityMsMock.mockReturnValue(stale);
+    render(<IdleSessionManager />);
+    expect(clearAuthMock).not.toHaveBeenCalled();
   });
 
   it('on interval, logs out if activity becomes stale', () => {

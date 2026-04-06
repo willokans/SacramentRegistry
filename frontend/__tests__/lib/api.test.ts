@@ -522,7 +522,7 @@ describe('login', () => {
     });
 
     await expect(login('a', 'b')).rejects.toThrow(
-      /email or password you entered is not correct/i,
+      /username or password you entered is not correct/i,
     );
   });
 

@@ -4,6 +4,7 @@ import com.wyloks.churchRegistry.dto.ForgotPasswordResponse;
 import com.wyloks.churchRegistry.dto.InviteProfileResponse;
 import com.wyloks.churchRegistry.dto.LoginResponse;
 import com.wyloks.churchRegistry.entity.AppUser;
+import com.wyloks.churchRegistry.entity.Parish;
 import com.wyloks.churchRegistry.entity.PasswordResetToken;
 import com.wyloks.churchRegistry.entity.RefreshToken;
 import com.wyloks.churchRegistry.repository.AppUserRepository;
@@ -11,8 +12,10 @@ import com.wyloks.churchRegistry.repository.PasswordResetTokenRepository;
 import com.wyloks.churchRegistry.repository.RefreshTokenRepository;
 import com.wyloks.churchRegistry.security.JwtService;
 import com.wyloks.churchRegistry.service.AuthService;
+import com.wyloks.churchRegistry.service.PasswordResetEmailService;
 import com.wyloks.churchRegistry.service.UserInvitationService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
@@ -23,11 +26,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 @Profile("!auth-slice")
+@Slf4j
 public class AuthServiceImpl implements AuthService {
 
     private final AppUserRepository appUserRepository;
@@ -36,6 +41,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final UserInvitationService userInvitationService;
+    private final PasswordResetEmailService passwordResetEmailService;
 
     @Value("${app.jwt.refresh-expiration-ms:604800000}")
     private long refreshExpirationMs;
@@ -146,13 +152,17 @@ public class AuthServiceImpl implements AuthService {
         }
         // When identifier contains @, try email first (user likely entered email; prefer user who has that email).
         // Otherwise try username first. Use case-insensitive lookups throughout.
-        java.util.Optional<AppUser> userOpt = trimmed.contains("@")
+        Optional<AppUser> userOpt = trimmed.contains("@")
                 ? appUserRepository.findByEmailIgnoreCase(trimmed).or(() -> appUserRepository.findByUsernameIgnoreCase(trimmed))
                 : appUserRepository.findByUsernameIgnoreCase(trimmed).or(() -> appUserRepository.findByEmailIgnoreCase(trimmed));
-        AppUser user = userOpt.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "No account found with that email or username."));
+        if (userOpt.isEmpty()) {
+            log.info("Forgot password request: no matching account");
+            return ForgotPasswordResponse.builder().build();
+        }
+        AppUser user = userOpt.get();
         if (user.getEmail() == null || user.getEmail().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "This username does not have an email address attached to it. Please contact the administrator to reset your password.");
+            log.info("Forgot password request: account has no email on file");
+            return ForgotPasswordResponse.builder().build();
         }
         passwordResetTokenRepository.deleteByUser(user);
         Instant now = Instant.now();
@@ -164,10 +174,28 @@ public class AuthServiceImpl implements AuthService {
                 .createdAt(now)
                 .build();
         passwordResetTokenRepository.save(token);
-        return ForgotPasswordResponse.builder()
-                .token(tokenValue)
-                .expiresAt(token.getExpiresAt())
-                .build();
+        try {
+            passwordResetEmailService.sendPasswordResetEmail(user.getEmail(), tokenValue, primaryParishNameForEmail(user));
+        } catch (Exception ex) {
+            log.error("Password reset email could not be sent; revoking token for this request", ex);
+            passwordResetTokenRepository.delete(token);
+        }
+        return ForgotPasswordResponse.builder().build();
+    }
+
+    /**
+     * Optional trust line in password-reset email; uses the user's primary parish when set.
+     */
+    private String primaryParishNameForEmail(AppUser user) {
+        Parish parish = user.getParish();
+        if (parish == null) {
+            return null;
+        }
+        String name = parish.getParishName();
+        if (name == null || name.isBlank()) {
+            return null;
+        }
+        return name.trim();
     }
 
     @Override

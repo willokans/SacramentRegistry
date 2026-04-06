@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Rate limits all HTTP entry points except health, CORS preflight, and Spring {@code /error}.
  * Login: {@code /api/auth/login} uses a strict bucket (default 5 attempts per 15 minutes per client IP).
+ * Forgot-password: {@code /api/auth/forgot-password} uses its own bucket (default 5 per 15 minutes per IP).
  * Refresh/logout share a separate bucket; everything else shares the general API bucket.
  * Client key: {@code X-Forwarded-For} first hop when present, else remote address.
  */
@@ -29,6 +30,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private final int loginLimit;
     private final int loginPeriodMinutes;
+    private final int forgotPasswordLimit;
+    private final int forgotPasswordPeriodMinutes;
     private final int refreshLimit;
     private final int refreshPeriodMinutes;
     private final int apiLimit;
@@ -38,12 +41,15 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final CorsProcessor corsProcessor = new DefaultCorsProcessor();
 
     private final Map<String, Bucket> loginBuckets = new ConcurrentHashMap<>();
+    private final Map<String, Bucket> forgotPasswordBuckets = new ConcurrentHashMap<>();
     private final Map<String, Bucket> refreshBuckets = new ConcurrentHashMap<>();
     private final Map<String, Bucket> apiBuckets = new ConcurrentHashMap<>();
 
     public RateLimitFilter(
             int loginLimit,
             int loginPeriodMinutes,
+            int forgotPasswordLimit,
+            int forgotPasswordPeriodMinutes,
             int refreshLimit,
             int refreshPeriodMinutes,
             int apiLimit,
@@ -51,6 +57,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
             CorsConfigurationSource corsConfigurationSource) {
         this.loginLimit = loginLimit;
         this.loginPeriodMinutes = loginPeriodMinutes;
+        this.forgotPasswordLimit = forgotPasswordLimit;
+        this.forgotPasswordPeriodMinutes = forgotPasswordPeriodMinutes;
         this.refreshLimit = refreshLimit;
         this.refreshPeriodMinutes = refreshPeriodMinutes;
         this.apiLimit = apiLimit;
@@ -97,6 +105,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (path.startsWith("/error")) return null; // avoid compounding failures on error dispatch
         if (path.startsWith("/api/auth/login")) {
             return loginBuckets.computeIfAbsent(clientKey, k -> buildBucket(loginLimit, loginPeriodMinutes));
+        }
+        if (path.startsWith("/api/auth/forgot-password")) {
+            return forgotPasswordBuckets.computeIfAbsent(
+                    clientKey, k -> buildBucket(forgotPasswordLimit, forgotPasswordPeriodMinutes));
         }
         if (path.startsWith("/api/auth/refresh") || path.startsWith("/api/auth/logout")) {
             return refreshBuckets.computeIfAbsent(clientKey, k -> buildBucket(refreshLimit, refreshPeriodMinutes));

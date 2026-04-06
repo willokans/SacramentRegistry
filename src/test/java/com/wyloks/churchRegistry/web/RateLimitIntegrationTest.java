@@ -17,7 +17,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
- * Verifies rate limiting on login and API endpoints.
+ * Verifies rate limiting on login, forgot-password, and API endpoints.
  * Uses low limits (3) via test properties for fast tests.
  * Each test uses a distinct X-Forwarded-For to avoid bucket sharing.
  */
@@ -25,6 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {
         "app.rate-limit.login.limit=3",
+        "app.rate-limit.forgot-password.limit=3",
         "app.rate-limit.api.limit=3"
 })
 class RateLimitIntegrationTest {
@@ -49,6 +50,28 @@ class RateLimitIntegrationTest {
         }
 
         mvc.perform(post("/api/auth/login")
+                        .header("X-Forwarded-For", clientIp)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.error").value("Too many requests. Please try again later."));
+    }
+
+    @Test
+    void forgotPassword_exceedsLimit_returns429() throws Exception {
+        String clientIp = "192.168.1.105";
+        String body = "{\"identifier\":\"anyone@example.com\"}";
+
+        for (int i = 0; i < 3; i++) {
+            mvc.perform(post("/api/auth/forgot-password")
+                            .header("X-Forwarded-For", clientIp)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isOk());
+        }
+
+        mvc.perform(post("/api/auth/forgot-password")
                         .header("X-Forwarded-For", clientIp)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))

@@ -13,15 +13,6 @@ function CrossIcon({ className }: { className?: string }) {
   );
 }
 
-function LockIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-      <rect x="4" y="8" width="12" height="8" rx="1" />
-      <path d="M6 8V5a4 4 0 018 0v3" />
-    </svg>
-  );
-}
-
 function EyeIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
@@ -36,6 +27,33 @@ function EyeOffIcon({ className }: { className?: string }) {
     <svg className={className} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
       <path d="M3 3l14 14M11 11a2 2 0 01-2.8-2.8M7 5C4 6.5 2 10 2 10s2 4 5 5M13 15c2.5-1 4-4 4-4s-1.5-3-4-4" />
     </svg>
+  );
+}
+
+const inputClass =
+  'w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 min-h-[44px] text-base text-gray-900 placeholder-gray-500 transition-[border-color,box-shadow] duration-150 ' +
+  'focus:border-sancta-maroon focus:outline-none focus:ring-2 focus:ring-sancta-maroon/30 focus:ring-offset-0';
+
+const primaryButtonClass =
+  'w-full min-h-[44px] rounded-lg bg-sancta-maroon px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-[background-color,transform,filter] duration-150 hover:bg-sancta-maroon-dark hover:shadow active:scale-[0.99] active:brightness-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-sancta-maroon focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-65 disabled:active:scale-100 inline-flex items-center justify-center gap-2';
+
+const backToSignInLinkClass =
+  'text-sm font-medium text-sancta-maroon underline-offset-2 decoration-transparent transition-colors duration-150 hover:text-sancta-maroon-dark hover:underline hover:decoration-sancta-maroon/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sancta-maroon/30 focus-visible:ring-offset-2 rounded-sm';
+
+function AuthShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-screen flex-col bg-pattern">
+      <header className="w-full shrink-0 border-b border-gray-300/80 bg-white/95 shadow-[0_1px_0_rgba(0,0,0,0.06),0_4px_14px_rgba(0,0,0,0.045)]">
+        <div className="mx-auto flex max-w-lg items-center gap-2 px-4 py-3.5">
+          <CrossIcon className="h-8 w-8 shrink-0 text-sancta-gold" aria-hidden />
+          <div className="min-w-0">
+            <p className="font-serif text-lg font-semibold leading-tight text-sancta-maroon">Sacrament Registry</p>
+            <p className="text-xs text-gray-500">Parish sacramental records</p>
+          </div>
+        </div>
+      </header>
+      <main className="flex flex-1 flex-col items-center justify-center px-4 py-8 sm:py-10">{children}</main>
+    </div>
   );
 }
 
@@ -98,44 +116,37 @@ export default function ResetPasswordPage() {
 
   if (!mounted) {
     return (
-      <main className="min-h-screen bg-pattern flex flex-col items-center justify-center px-4 pt-4 pb-8 sm:py-12">
-        <p className="text-gray-600">Loading…</p>
-      </main>
+      <AuthShell>
+        <p className="text-sm text-gray-600">Loading…</p>
+      </AuthShell>
     );
   }
 
   if (!isTokenFlow && !getStoredToken()) {
     return (
-      <main className="min-h-screen bg-pattern flex flex-col items-center justify-center px-4 pt-4 pb-8 sm:py-12">
-        <p className="text-gray-600">Redirecting to login…</p>
-      </main>
+      <AuthShell>
+        <p className="text-sm text-gray-600">Redirecting to login…</p>
+      </AuthShell>
     );
   }
 
   return (
-    <main className="min-h-screen bg-pattern flex flex-col items-center justify-center px-4 pt-4 pb-8 sm:py-12">
-      <header className="text-center mb-4 sm:mb-8">
-        <CrossIcon className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-sancta-gold mb-2" />
-        <h1 className="text-3xl sm:text-4xl font-serif font-semibold text-sancta-maroon">Sacrament Registry</h1>
-        <p className="text-sm sm:text-base text-gray-600 mt-1">Growing in faith together.</p>
-      </header>
-
-      <div className="w-full max-w-md bg-white/95 rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8">
-        <div className="mb-6 text-center">
-          <h2 className="text-xl font-semibold text-sancta-maroon">
+    <AuthShell>
+      <div className="w-full max-w-md rounded-lg border border-gray-300/90 bg-white p-7 shadow-[0_1px_3px_rgba(0,0,0,0.05),0_10px_28px_rgba(0,0,0,0.075)] sm:p-9">
+        <div className="mb-6">
+          <h1 className="font-serif text-xl font-semibold text-sancta-maroon sm:text-2xl">
             {isFirstLoginFlow ? 'Set password' : 'Reset password'}
-          </h2>
-          <p className="text-sm text-gray-600 mt-0.5">
+          </h1>
+          <p className="mt-1 text-sm text-gray-600">
             {isFirstLoginFlow
               ? 'You must set a new password before continuing.'
               : 'Enter your new password below.'}
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="newPassword" className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
-              <LockIcon className="w-4 h-4 text-gray-500" />
+            <label htmlFor="newPassword" className="mb-1 block text-xs font-medium text-gray-500">
               New password
             </label>
             <div className="relative">
@@ -148,22 +159,21 @@ export default function ResetPasswordPage() {
                 minLength={8}
                 autoComplete="new-password"
                 placeholder="At least 8 characters"
-                className="w-full px-4 py-3 pr-14 sm:pr-12 rounded-xl border border-gray-200 bg-gray-50/50 focus:outline-none focus:ring-2 focus:ring-sancta-maroon/30 focus:border-sancta-maroon text-gray-900 placeholder-gray-500"
+                className={`${inputClass} pr-12`}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((p) => !p)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-2 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 sm:p-1 flex items-center justify-center text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-sancta-maroon/30 rounded"
+                className="absolute right-2 top-1/2 flex min-h-[44px] min-w-[44px] -translate-y-1/2 items-center justify-center rounded-md text-gray-500 transition-colors duration-150 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sancta-maroon/25 sm:min-h-0 sm:min-w-0 sm:p-2"
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
-                {showPassword ? <EyeOffIcon className="w-6 h-6 sm:w-5 sm:h-5" /> : <EyeIcon className="w-6 h-6 sm:w-5 sm:h-5" />}
+                {showPassword ? <EyeOffIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
               </button>
             </div>
           </div>
 
           <div>
-            <label htmlFor="confirmPassword" className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
-              <LockIcon className="w-4 h-4 text-gray-500" />
+            <label htmlFor="confirmPassword" className="mb-1 block text-xs font-medium text-gray-500">
               Confirm password
             </label>
             <input
@@ -175,40 +185,47 @@ export default function ResetPasswordPage() {
               minLength={8}
               autoComplete="new-password"
               placeholder="Confirm your new password"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50/50 focus:outline-none focus:ring-2 focus:ring-sancta-maroon/30 focus:border-sancta-maroon text-gray-900 placeholder-gray-500"
+              className={inputClass}
             />
           </div>
 
           {error && (
-            <p role="alert" className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
+            <div
+              role="alert"
+              className="rounded-md border border-stone-200 bg-stone-50 px-3 py-2.5 text-sm text-stone-800"
+            >
               {error}
-            </p>
+            </div>
           )}
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full py-3 min-h-[44px] rounded-xl bg-sancta-maroon hover:bg-sancta-maroon-dark text-white font-semibold focus:outline-none focus:ring-2 focus:ring-sancta-maroon focus:ring-offset-2 transition-colors disabled:opacity-70 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
-          >
-            {submitting && (
-              <svg className="animate-spin h-5 w-5 text-white shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden>
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-            )}
-            {submitting ? 'Setting password…' : 'Set password'}
-          </button>
+          <div className="pt-2">
+            <button type="submit" disabled={submitting} className={primaryButtonClass}>
+              {submitting && (
+                <svg className="h-4 w-4 shrink-0 animate-spin text-white" fill="none" viewBox="0 0 24 24" aria-hidden>
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              )}
+              {submitting ? 'Setting password…' : 'Set password'}
+            </button>
+          </div>
+
+          <div className="border-t border-gray-100 pt-5">
+            <p className="text-center">
+              <Link
+                href="/login"
+                className={`${backToSignInLinkClass} inline-flex min-h-[44px] items-center justify-center py-1`}
+              >
+                Back to Sign In
+              </Link>
+            </p>
+          </div>
         </form>
 
-        <p className="text-center mt-6">
-          <Link
-            href="/login"
-            className="text-sm text-sancta-maroon font-medium hover:underline focus:outline-none focus:ring-2 focus:ring-sancta-maroon/30 rounded py-2 min-h-[44px] inline-flex items-center justify-center"
-          >
-            Back to Sign In
-          </Link>
+        <p className="mt-4 text-center text-xs text-gray-500">
+          Need help? Contact your parish administrator for access, invitations, or account questions.
         </p>
       </div>
-    </main>
+    </AuthShell>
   );
 }

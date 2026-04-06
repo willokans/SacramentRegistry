@@ -198,33 +198,30 @@ class AuthControllerTest {
     }
 
     @Test
-    void forgotPassword_returns200AndToken_whenIdentifierExists() throws Exception {
-        ForgotPasswordResponse response = ForgotPasswordResponse.builder()
-                .token("reset-token-abc123")
-                .expiresAt(java.time.Instant.now().plusSeconds(3600))
-                .build();
+    void forgotPassword_returns200AndGenericMessage_whenIdentifierExists() throws Exception {
+        ForgotPasswordResponse response = ForgotPasswordResponse.builder().build();
         when(authService.forgotPassword("user@example.com")).thenReturn(response);
 
         mvc.perform(post("/api/auth/forgot-password")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"identifier\":\"user@example.com\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.token").value("reset-token-abc123"))
-                .andExpect(jsonPath("$.expiresAt").exists());
+                .andExpect(jsonPath("$.message").value(ForgotPasswordResponse.MESSAGE))
+                .andExpect(jsonPath("$.token").doesNotExist());
 
         verify(authService).forgotPassword("user@example.com");
     }
 
     @Test
-    void forgotPassword_returns400_whenIdentifierNotFound() throws Exception {
-        when(authService.forgotPassword("unknown@example.com"))
-                .thenThrow(new org.springframework.web.server.ResponseStatusException(
-                        org.springframework.http.HttpStatus.BAD_REQUEST, "No account found with that email address."));
+    void forgotPassword_returns200AndGenericMessage_whenIdentifierNotFound() throws Exception {
+        when(authService.forgotPassword("unknown@example.com")).thenReturn(ForgotPasswordResponse.builder().build());
 
         mvc.perform(post("/api/auth/forgot-password")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"identifier\":\"unknown@example.com\"}"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value(ForgotPasswordResponse.MESSAGE))
+                .andExpect(jsonPath("$.token").doesNotExist());
     }
 
     @Test

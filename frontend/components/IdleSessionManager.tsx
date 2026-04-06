@@ -8,7 +8,7 @@ import {
   touchAuthActivity,
   readAuthLastActivityMs,
 } from '@/lib/api';
-import { IDLE_SESSION_MS, isIdleSessionExpired } from '@/lib/authIdle';
+import { getIdleSessionLimitMs, isIdleSessionExpired } from '@/lib/authIdle';
 
 const CHECK_INTERVAL_MS = 60_000;
 const ACTIVITY_THROTTLE_MS = 5_000;
@@ -16,8 +16,9 @@ const ACTIVITY_THROTTLE_MS = 5_000;
 const ACTIVITY_EVENTS: (keyof WindowEventMap)[] = ['keydown', 'pointerdown', 'scroll', 'wheel', 'touchstart'];
 
 /**
- * Tracks last user activity in localStorage and signs out after {@link IDLE_SESSION_MS} of idleness.
- * Silent JWT refresh does not reset the timer (only touchAuthActivity / login does).
+ * Tracks last user activity in localStorage and signs out after idle limit (default two hours;
+ * longer when the user chose "Remember device" at login). Silent JWT refresh does not reset the
+ * timer (only touchAuthActivity / login does).
  */
 export default function IdleSessionManager() {
   const router = useRouter();
@@ -39,7 +40,7 @@ export default function IdleSessionManager() {
       touchAuthActivity();
       return;
     }
-    if (isIdleSessionExpired(last, Date.now())) {
+    if (isIdleSessionExpired(last, Date.now(), getIdleSessionLimitMs())) {
       clearAuth();
       router.replace('/login?reason=idle');
     }

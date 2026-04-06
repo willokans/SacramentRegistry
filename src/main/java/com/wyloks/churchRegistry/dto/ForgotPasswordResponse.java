@@ -5,8 +5,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.Instant;
-
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -14,13 +12,11 @@ import java.time.Instant;
 public class ForgotPasswordResponse {
 
     /**
-     * Time-limited token to use with POST /api/auth/reset-password-by-token.
-     * MVP: no email sent; Super Admin shares this token with the user.
+     * Same user-facing text for every non-empty identifier; does not reveal whether an account exists.
      */
-    private String token;
+    public static final String MESSAGE =
+            "If an account exists for this username, we've sent password reset instructions to the email on file.";
 
-    /**
-     * When the token expires (ISO-8601).
-     */
-    private Instant expiresAt;
+    @Builder.Default
+    private String message = MESSAGE;
 }

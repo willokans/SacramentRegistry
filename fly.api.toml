@@ -21,6 +21,8 @@ primary_region = "jnb"  # Johannesburg - closest to Nigeria
 [env]
   PORT = "8080"
   SPRING_PROFILES_ACTIVE = "prod"
+  # Set via deploy workflow or: fly secrets set APP_PASSWORD_RESET_PUBLIC_BASE_URL=https://<frontend-app>.fly.dev
+  # (public web origin for password-reset links; required for forgot-password email to build valid URLs)
 
 [http_service]
   internal_port = 8080

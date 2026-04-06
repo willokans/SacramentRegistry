@@ -25,5 +25,8 @@ app:
   rate-limit:
     login:
       limit: 10000
+    forgot-password:
+      limit: 10000
+      period-minutes: 15
     api:
       limit: 100000

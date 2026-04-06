@@ -63,8 +63,8 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
-    @Operation(summary = "Forgot password", description = "Request a password reset token by email or username. MVP: no email sent; returns the token for Super Admin to share with the user. Use the token with POST /api/auth/reset-password-by-token. If user found by username has no email, returns 400.")
-    @ApiResponse(responseCode = "400", description = "No account found, or username has no email attached")
+    @Operation(summary = "Forgot password", description = "Request password reset instructions by email or username. Returns the same JSON for any non-empty identifier to prevent account enumeration. When a matching account has an email on file, a reset token is created server-side and the user completes reset via the link (POST /api/auth/reset-password-by-token).")
+    @ApiResponse(responseCode = "400", description = "Validation error (e.g. missing or blank identifier)")
     @SecurityRequirements
     @PostMapping("/forgot-password")
     public ResponseEntity<ForgotPasswordResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
