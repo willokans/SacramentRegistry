@@ -40,6 +40,11 @@ Copy staging values into the `_PROD` secrets. CORS must include prod frontend UR
 | `API_JWT_SECRET_PROD` | Same as `API_JWT_SECRET` or distinct |
 | `API_CORS_ALLOWED_ORIGINS_PROD` | `https://church-registry-staging.fly.dev,https://church-registry.fly.dev` (staging + prod frontend URLs) |
 | `SUPABASE_SERVICE_ROLE_KEY_PROD` | Same as `SUPABASE_SERVICE_ROLE_KEY` |
+| `SMTP_HOST_PROD` | Same as staging SMTP host (e.g. `mail.privateemail.com`) — **required**; API `prod` profile validates mail on startup |
+| `SMTP_USERNAME_PROD` | Mailbox user (must match domain in `APP_INVITATION_EMAIL_ALLOWED_DOMAIN`, default `sacramentregistry.com`) |
+| `SMTP_PASSWORD_PROD` | SMTP password |
+| `SMTP_PORT_PROD` | Optional; default `587` if unset |
+| `APP_INVITATION_ACCEPT_BASE_URL_PROD` | Public URL prefix for accepting invites, e.g. `https://app.sacramentregistry.com/accept-invite` or `https://church-registry.fly.dev/accept-invite` during Pre Postgres |
 | `NEXT_PUBLIC_SUPABASE_URL_PROD` | Same as staging project URL (`https://<staging-ref>.supabase.co`) — must match the DB used for `app_users` |
 | `NEXT_PUBLIC_API_URL_PROD` | `https://church-registry-api.fly.dev` |
 | `API_SENTRY_DSN_PROD` | Sentry DSN for backend ingestion |
@@ -98,6 +103,8 @@ When the production Supabase project exists and buckets are created, **point pro
    | `NEXT_PUBLIC_SUPABASE_URL_PROD` | Production project URL — **must** match the project used for DB + storage so login and API routes stay consistent |
    | `API_CORS_ALLOWED_ORIGINS_PROD` | Your production frontend origin(s), e.g. `https://app.sacramentregistry.com` |
    | `NEXT_PUBLIC_API_URL_PROD` | Public API base URL, e.g. `https://api.sacramentregistry.com` |
+   | `SMTP_HOST_PROD`, `SMTP_USERNAME_PROD`, `SMTP_PASSWORD_PROD` | Production SMTP (same rules as Pre Postgres) |
+   | `APP_INVITATION_ACCEPT_BASE_URL_PROD` | Production frontend accept-invite URL, e.g. `https://app.sacramentregistry.com/accept-invite` |
    | `API_JWT_SECRET_PROD` | Prefer a **new** strong secret for production (users must sign in again) or keep existing if you must avoid invalidating sessions |
 
    Optional: `SUPABASE_URL_PROD` — set to the same Project URL if you want the Spring API to use an explicit `SUPABASE_URL` (otherwise it is inferred from `SPRING_DATASOURCE_USERNAME`).
