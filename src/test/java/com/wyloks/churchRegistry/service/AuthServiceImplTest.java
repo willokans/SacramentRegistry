@@ -1,6 +1,7 @@
 package com.wyloks.churchRegistry.service;
 
 import com.wyloks.churchRegistry.dto.ForgotPasswordResponse;
+import com.wyloks.churchRegistry.dto.LoginResponse;
 import com.wyloks.churchRegistry.entity.AppUser;
 import com.wyloks.churchRegistry.entity.Parish;
 import com.wyloks.churchRegistry.entity.PasswordResetToken;
@@ -17,6 +18,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
@@ -140,5 +142,41 @@ class AuthServiceImplTest {
         ArgumentCaptor<PasswordResetToken> tokenCaptor = ArgumentCaptor.forClass(PasswordResetToken.class);
         verify(passwordResetTokenRepository).save(tokenCaptor.capture());
         verify(passwordResetTokenRepository).delete(tokenCaptor.getValue());
+    }
+
+    @Test
+    void login_whenPasswordMatchesCaseInsensitiveUsername_returnsTokens() {
+        AppUser user = AppUser.builder()
+                .id(10L)
+                .username("SuperAdmin")
+                .passwordHash("encoded")
+                .role("SUPER_ADMIN")
+                .displayName("Super")
+                .mustResetPassword(false)
+                .build();
+        when(appUserRepository.findByUsernameOrEmailIgnoreCase("superadmin")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("secret", "encoded")).thenReturn(true);
+        when(jwtService.generateToken("SuperAdmin", "SUPER_ADMIN")).thenReturn("access-jwt");
+        when(refreshTokenRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        LoginResponse res = authService.login("superadmin", "secret");
+
+        assertThat(res.getToken()).isEqualTo("access-jwt");
+        assertThat(res.getUsername()).isEqualTo("SuperAdmin");
+        verify(refreshTokenRepository).save(any());
+    }
+
+    @Test
+    void login_whenPasswordWrong_throwsBadCredentials() {
+        AppUser user = AppUser.builder()
+                .id(11L)
+                .username("u")
+                .passwordHash("encoded")
+                .role("ADMIN")
+                .build();
+        when(appUserRepository.findByUsernameOrEmailIgnoreCase("u")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("wrong", "encoded")).thenReturn(false);
+
+        assertThatThrownBy(() -> authService.login("u", "wrong")).isInstanceOf(BadCredentialsException.class);
     }
 }
