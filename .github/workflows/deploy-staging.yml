@@ -103,7 +103,24 @@ jobs:
               printf 'SUPABASE_SERVICE_ROLE_KEY=%s\n' "$SUPABASE_SERVICE_ROLE_KEY"
             fi
           } > "$SECRETS_IMPORT"
-          flyctl secrets import --stage --app "$APP_NAME" < "$SECRETS_IMPORT"
+          # Fly API occasionally returns 5xx; retry with backoff (see status.fly.io)
+          fly_with_retry() {
+            local max=5 n=1 wait=15
+            while true; do
+              if "$@"; then
+                return 0
+              fi
+              if [ "$n" -ge "$max" ]; then
+                echo "::error::flyctl failed after $max attempts"
+                return 1
+              fi
+              echo "flyctl failed (attempt $n/$max, retrying in ${wait}s)..."
+              sleep "$wait"
+              n=$((n + 1))
+              wait=$((wait + 10))
+            done
+          }
+          fly_with_retry flyctl secrets import --stage --app "$APP_NAME" < "$SECRETS_IMPORT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -177,7 +194,24 @@ jobs:
           API_APP="${FLY_API_APP_NAME:-church-registry-api-staging}"
           FRONTEND_API_URL="${NEXT_PUBLIC_API_URL:-https://${API_APP}.fly.dev}"
 
-          flyctl secrets set \
+          fly_with_retry() {
+            local max=5 n=1 wait=15
+            while true; do
+              if "$@"; then
+                return 0
+              fi
+              if [ "$n" -ge "$max" ]; then
+                echo "::error::flyctl failed after $max attempts"
+                return 1
+              fi
+              echo "flyctl failed (attempt $n/$max, retrying in ${wait}s)..."
+              sleep "$wait"
+              n=$((n + 1))
+              wait=$((wait + 10))
+            done
+          }
+
+          fly_with_retry flyctl secrets set \
             NEXT_PUBLIC_API_URL="$FRONTEND_API_URL" \
             SENTRY_ENVIRONMENT="staging" \
             NEXT_PUBLIC_SENTRY_ENVIRONMENT="staging" \
@@ -186,7 +220,7 @@ jobs:
             --app "$FRONTEND_APP"
 
           if [ -n "${WEB_SENTRY_DSN:-}" ]; then
-            flyctl secrets set \
+            fly_with_retry flyctl secrets set \
               NEXT_PUBLIC_SENTRY_DSN="$WEB_SENTRY_DSN" \
               SENTRY_DSN="$WEB_SENTRY_DSN" \
               --stage \
