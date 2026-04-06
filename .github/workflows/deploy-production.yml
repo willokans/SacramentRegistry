@@ -94,6 +94,7 @@ jobs:
           SMTP_PASSWORD_PROD: ${{ secrets.SMTP_PASSWORD_PROD || secrets.SMTP_PASSWORD }}
           SMTP_PORT_PROD: ${{ secrets.SMTP_PORT_PROD || secrets.SMTP_PORT }}
           APP_INVITATION_ACCEPT_BASE_URL_PROD: ${{ secrets.APP_INVITATION_ACCEPT_BASE_URL_PROD || secrets.APP_INVITATION_ACCEPT_BASE_URL }}
+          APP_PASSWORD_RESET_PUBLIC_BASE_URL_PROD: ${{ secrets.APP_PASSWORD_RESET_PUBLIC_BASE_URL_PROD || secrets.APP_PASSWORD_RESET_PUBLIC_BASE_URL }}
         run: |
           set -euo pipefail
           APP_NAME="church-registry-api"
@@ -167,6 +168,13 @@ jobs:
             printf 'SMTP_PASSWORD=%s\n' "$SMTP_PASSWORD_PROD"
             printf 'SMTP_PORT=%s\n' "${SMTP_PORT_PROD:-587}"
             printf 'APP_INVITATION_ACCEPT_BASE_URL=%s\n' "$(printf '%s' "$APP_INVITATION_ACCEPT_BASE_URL_PROD" | tr -d '\r\n')"
+            INVITE_BASE="$(printf '%s' "$APP_INVITATION_ACCEPT_BASE_URL_PROD" | tr -d '\r\n')"
+            if [ -n "${APP_PASSWORD_RESET_PUBLIC_BASE_URL_PROD:-}" ]; then
+              RESET_PUBLIC="$(printf '%s' "$APP_PASSWORD_RESET_PUBLIC_BASE_URL_PROD" | tr -d '\r\n')"
+            else
+              RESET_PUBLIC="$(printf '%s' "$INVITE_BASE" | sed -E 's#^(https?://[^/]+).*$#\1#')"
+            fi
+            printf 'APP_PASSWORD_RESET_PUBLIC_BASE_URL=%s\n' "$RESET_PUBLIC"
           } > "$SECRETS_IMPORT"
           fly_with_retry() {
             local max=5 n=1 wait=15

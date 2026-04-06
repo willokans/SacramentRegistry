@@ -56,7 +56,9 @@ app:
       allowed-domain: ${APP_INVITATION_EMAIL_ALLOWED_DOMAIN:sacramentregistry.com}
       support: ${APP_INVITATION_EMAIL_SUPPORT:support@sacramentregistry.com}
   password-reset:
-    public-base-url: ${APP_PASSWORD_RESET_PUBLIC_BASE_URL}
+    # Origin of the public web app (e.g. https://church-registry-staging.fly.dev). Default empty so the API can
+    # start if unset; set APP_PASSWORD_RESET_PUBLIC_BASE_URL on Fly or forgot-password emails will fail when sent.
+    public-base-url: ${APP_PASSWORD_RESET_PUBLIC_BASE_URL:}
     email:
       from: ${APP_PASSWORD_RESET_EMAIL_FROM:${APP_INVITATION_EMAIL_FROM:onboarding@sacramentregistry.com}}
       support: ${APP_PASSWORD_RESET_EMAIL_SUPPORT:${APP_INVITATION_EMAIL_SUPPORT:support@sacramentregistry.com}}
