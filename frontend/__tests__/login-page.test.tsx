@@ -56,16 +56,21 @@ describe('Login page', () => {
     expect(privacyLink).toHaveAttribute('href', '/privacy');
   });
 
-  it('shows a Terms of Use link', () => {
+  it('shows a Forgot password link', () => {
     render(<LoginPage />);
-    const termsLink = screen.getByRole('link', { name: 'Terms of Use' });
-    expect(termsLink).toHaveAttribute('href', '/terms-of-use');
+    const forgotLink = screen.getByRole('link', { name: /forgot password/i });
+    expect(forgotLink).toHaveAttribute('href', '/login/forgot-password');
+  });
+
+  it('shows Remember device checkbox', () => {
+    render(<LoginPage />);
+    expect(screen.getByRole('checkbox', { name: /remember this device/i })).toBeInTheDocument();
   });
 
   it('shows inactivity sign-out message when reason=idle', () => {
     locationSearch = '?reason=idle';
     render(<LoginPage />);
-    expect(screen.getByText(/signed out after two hours without activity/i)).toBeInTheDocument();
+    expect(screen.getByText(/signed out for inactivity/i)).toBeInTheDocument();
   });
 
   it('on successful login stores token and redirects to dashboard', async () => {
@@ -120,7 +125,7 @@ describe('Login page', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/email or password you entered is not correct|invalid credentials|login failed/i),
+        screen.getByText(/username or password you entered is not correct|invalid credentials|login failed/i),
       ).toBeInTheDocument();
     });
     expect(mockPush).not.toHaveBeenCalled();

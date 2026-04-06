@@ -1,3 +1,4 @@
+import { clearRememberDevicePreference } from '@/lib/authIdle';
 import { getIsOnline } from '@/lib/offline/network';
 import { parseErrorResponse } from '@/lib/parseErrorResponse';
 import {
@@ -60,7 +61,7 @@ export async function login(username: string, password: string) {
     const text = await res.text();
     if (res.status === 401) {
       throw new Error(
-        'The email or password you entered is not correct. Please try again, or use Forgot password if you need help.',
+        'The username or password you entered is not correct. Please try again, or use Forgot password if you need help.',
       );
     }
     if (res.status === 429) {
@@ -139,6 +140,7 @@ export function clearAuth() {
   localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
   localStorage.removeItem(USER_STORAGE_KEY);
   localStorage.removeItem(AUTH_LAST_ACTIVITY_KEY);
+  clearRememberDevicePreference();
 }
 
 /** Request password reset by email or username. Returns token (MVP: no email sent; share token with user). Uses Next.js proxy to avoid CORS. */

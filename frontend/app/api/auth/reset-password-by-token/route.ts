@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { nextJsonFromBackendErrorBody } from '@/lib/backendProxyErrorResponse';
 
 /**
  * Proxies POST /api/auth/reset-password-by-token to the Spring Boot backend.
@@ -21,10 +22,10 @@ export async function POST(request: Request) {
     });
     if (res.status === 204) return new NextResponse(null, { status: 204 });
     const text = await res.text();
-    return NextResponse.json(
-      { error: text || 'Invalid or expired reset token' },
-      { status: res.status }
-    );
+    if (!res.ok) {
+      return nextJsonFromBackendErrorBody(text, 'Invalid or expired reset token', res.status);
+    }
+    return new NextResponse(null, { status: res.status });
   } catch (err) {
     console.error('[auth/reset-password-by-token]', err);
     return NextResponse.json(

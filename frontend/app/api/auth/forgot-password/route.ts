@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { nextJsonFromBackendErrorBody } from '@/lib/backendProxyErrorResponse';
 
 /**
  * Proxies POST /api/auth/forgot-password to the Spring Boot backend.
@@ -21,10 +22,7 @@ export async function POST(request: Request) {
     });
     const text = await res.text();
     if (!res.ok) {
-      return NextResponse.json(
-        { error: text || 'Failed to request password reset' },
-        { status: res.status }
-      );
+      return nextJsonFromBackendErrorBody(text, 'Failed to request password reset', res.status);
     }
     return NextResponse.json(JSON.parse(text || '{}'));
   } catch (err) {
