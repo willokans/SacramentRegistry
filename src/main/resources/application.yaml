@@ -65,7 +65,7 @@ app:
   rate-limit:
     login:
       limit: 5
-      period-minutes: 1
+      period-minutes: 15
     refresh:
       limit: 15
       period-minutes: 1

@@ -15,7 +15,7 @@ public class RateLimitConfig {
     @Bean
     public RateLimitFilter rateLimitFilter(
             @Value("${app.rate-limit.login.limit:5}") int loginLimit,
-            @Value("${app.rate-limit.login.period-minutes:1}") int loginPeriodMinutes,
+            @Value("${app.rate-limit.login.period-minutes:15}") int loginPeriodMinutes,
             @Value("${app.rate-limit.refresh.limit:15}") int refreshLimit,
             @Value("${app.rate-limit.refresh.period-minutes:1}") int refreshPeriodMinutes,
             @Value("${app.rate-limit.api.limit:300}") int apiLimit,
@@ -27,7 +27,7 @@ public class RateLimitConfig {
     public FilterRegistrationBean<RateLimitFilter> rateLimitFilterRegistration(RateLimitFilter filter) {
         FilterRegistrationBean<RateLimitFilter> registration = new FilterRegistrationBean<>(filter);
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE); // Run before Spring Security
-        registration.addUrlPatterns("/api/*");
+        registration.addUrlPatterns("/*");
         return registration;
     }
 }
