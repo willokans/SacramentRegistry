@@ -9,6 +9,7 @@ import {
   fetchDashboardCounts,
   fetchDioceseDashboard,
   getStoredDioceseId,
+  login,
   setStoredDioceseId,
   type DioceseDashboardResponse,
 } from '@/lib/api';
@@ -477,5 +478,101 @@ describe('diocese API backward compatibility', () => {
       }),
     );
     expect(result).toEqual({ id: 12, dioceseName: 'Diocese of Abuja' });
+  });
+});
+
+describe('login', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.NEXT_PUBLIC_API_URL = 'http://localhost:8080';
+  });
+
+  it('POSTs credentials to /api/auth/login and returns JSON on success', async () => {
+    const payload = {
+      token: 'access',
+      refreshToken: 'refresh',
+      user: { username: 'u@example.com', displayName: 'User', role: 'ADMIN' },
+    };
+    const mockFetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(payload),
+      text: () => Promise.resolve(''),
+    });
+    global.fetch = mockFetch;
+
+    const result = await login('u@example.com', 'secret');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:8080/api/auth/login',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'u@example.com', password: 'secret' }),
+      }),
+    );
+    expect(result).toEqual(payload);
+  });
+
+  it('throws a user-friendly message on 401', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      text: () => Promise.resolve(''),
+    });
+
+    await expect(login('a', 'b')).rejects.toThrow(
+      /email or password you entered is not correct/i,
+    );
+  });
+
+  it('throws API rate-limit message on 429 when body includes error', async () => {
+    const body = JSON.stringify({ error: 'Too many requests. Please try again later.' });
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      text: () => Promise.resolve(body),
+    });
+
+    await expect(login('a', 'b')).rejects.toThrow('Too many requests. Please try again later.');
+  });
+
+  it('throws default rate-limit guidance on 429 when body is empty', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      text: () => Promise.resolve(''),
+    });
+
+    await expect(login('a', 'b')).rejects.toThrow(/Too many sign-in attempts from this network/i);
+  });
+
+  it('throws a user-friendly message on 5xx', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: () => Promise.resolve(''),
+    });
+
+    await expect(login('a', 'b')).rejects.toThrow(/temporarily unavailable/i);
+  });
+
+  it('throws parsed detail on other errors (e.g. 400)', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      text: () => Promise.resolve(JSON.stringify({ message: 'Account is locked.' })),
+    });
+
+    await expect(login('a', 'b')).rejects.toThrow('Account is locked.');
+  });
+
+  it('maps Failed to fetch to a user-friendly network message after retries', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await expect(login('a', 'b')).rejects.toThrow(
+      /We could not reach the server\. Check your internet connection/i,
+    );
+    expect(global.fetch).toHaveBeenCalled();
   });
 });

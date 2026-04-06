@@ -75,7 +75,9 @@ export default function LoginPage() {
         ? { username: res.username, displayName: res.displayName ?? null, role: res.role ?? null }
         : null);
       if (!token || !user) {
-        throw new Error('Invalid response from server');
+        throw new Error(
+          'We could not finish signing you in because of an unexpected response. Please try again, or contact your parish administrator.',
+        );
       }
       storeAuth(token, refreshToken, user);
       // Set default parish so ParishContext shows it on first load
@@ -89,7 +91,7 @@ export default function LoginPage() {
       // Full page navigation so home loads with auth in localStorage
       window.location.href = '/dashboard';
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      setError(err instanceof Error ? err.message : 'Sign-in did not complete. Please try again.');
       setSubmitting(false);
     }
   }
