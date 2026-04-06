@@ -58,6 +58,30 @@ class RateLimitIntegrationTest {
     }
 
     @Test
+    void login_exceedsLimit_crossOrigin_includesCorsHeaders() throws Exception {
+        String clientIp = "192.168.1.199";
+        String body = "{\"username\":\"admin\",\"password\":\"wrong\"}";
+        String origin = "http://localhost:3000";
+
+        for (int i = 0; i < 3; i++) {
+            mvc.perform(post("/api/auth/login")
+                            .header("X-Forwarded-For", clientIp)
+                            .header("Origin", origin)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        mvc.perform(post("/api/auth/login")
+                        .header("X-Forwarded-For", clientIp)
+                        .header("Origin", origin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Access-Control-Allow-Origin", origin));
+    }
+
+    @Test
     void api_exceedsLimit_returns429() throws Exception {
         String clientIp = "192.168.1.101";
 
