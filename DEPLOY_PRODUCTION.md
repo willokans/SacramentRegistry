@@ -201,6 +201,16 @@ Production URLs: https://sacramentregistry.com (frontend), https://api.sacrament
 
 ---
 
+## Troubleshooting: login shows “Failed to fetch” (api.sacramentregistry.com)
+
+The browser calls the Spring API directly for `POST /api/auth/login` (`NEXT_PUBLIC_API_URL`). That error usually means the response was blocked as cross-origin, or the request never completed.
+
+1. **`CORS_ALLOWED_ORIGINS` on Fly (`church-registry-api`)** must allow the **exact** origin users see (scheme + host + port), e.g. both `https://sacramentregistry.com` and `https://www.sacramentregistry.com` if you serve the app on both. After deploying the API, apex and `www` variants of a simple domain (one dot in the hostname, e.g. `sacramentregistry.com`) are **auto-expanded** in CORS so listing one HTTPS origin is often enough.
+2. **429 rate limit:** If login was tried many times from the same IP, the API returns 429. The rate-limit filter now adds CORS headers on 429 so the browser can show “Too many requests” instead of a generic network failure.
+3. **TLS / DNS:** Confirm `https://api.sacramentregistry.com/api/health` loads in a browser and certificates are valid.
+
+---
+
 ## Phase 5: Hardening
 
 - Use `application-prod.yaml` (set via `SPRING_PROFILES_ACTIVE=prod`)

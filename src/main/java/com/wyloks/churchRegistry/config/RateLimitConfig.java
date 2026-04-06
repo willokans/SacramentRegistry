@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.Ordered;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 @Configuration
 @Profile("!auth-slice")
@@ -14,13 +15,21 @@ public class RateLimitConfig {
 
     @Bean
     public RateLimitFilter rateLimitFilter(
+            CorsConfigurationSource corsConfigurationSource,
             @Value("${app.rate-limit.login.limit:5}") int loginLimit,
             @Value("${app.rate-limit.login.period-minutes:15}") int loginPeriodMinutes,
             @Value("${app.rate-limit.refresh.limit:15}") int refreshLimit,
             @Value("${app.rate-limit.refresh.period-minutes:1}") int refreshPeriodMinutes,
             @Value("${app.rate-limit.api.limit:300}") int apiLimit,
             @Value("${app.rate-limit.api.period-minutes:1}") int apiPeriodMinutes) {
-        return new RateLimitFilter(loginLimit, loginPeriodMinutes, refreshLimit, refreshPeriodMinutes, apiLimit, apiPeriodMinutes);
+        return new RateLimitFilter(
+                loginLimit,
+                loginPeriodMinutes,
+                refreshLimit,
+                refreshPeriodMinutes,
+                apiLimit,
+                apiPeriodMinutes,
+                corsConfigurationSource);
     }
 
     @Bean

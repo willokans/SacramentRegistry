@@ -7,6 +7,11 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.lang.NonNull;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.CorsProcessor;
+import org.springframework.web.cors.CorsUtils;
+import org.springframework.web.cors.DefaultCorsProcessor;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -29,6 +34,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final int apiLimit;
     private final int apiPeriodMinutes;
 
+    private final CorsConfigurationSource corsConfigurationSource;
+    private final CorsProcessor corsProcessor = new DefaultCorsProcessor();
+
     private final Map<String, Bucket> loginBuckets = new ConcurrentHashMap<>();
     private final Map<String, Bucket> refreshBuckets = new ConcurrentHashMap<>();
     private final Map<String, Bucket> apiBuckets = new ConcurrentHashMap<>();
@@ -39,13 +47,15 @@ public class RateLimitFilter extends OncePerRequestFilter {
             int refreshLimit,
             int refreshPeriodMinutes,
             int apiLimit,
-            int apiPeriodMinutes) {
+            int apiPeriodMinutes,
+            CorsConfigurationSource corsConfigurationSource) {
         this.loginLimit = loginLimit;
         this.loginPeriodMinutes = loginPeriodMinutes;
         this.refreshLimit = refreshLimit;
         this.refreshPeriodMinutes = refreshPeriodMinutes;
         this.apiLimit = apiLimit;
         this.apiPeriodMinutes = apiPeriodMinutes;
+        this.corsConfigurationSource = corsConfigurationSource;
     }
 
     @Override
@@ -64,9 +74,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         Bucket bucket = resolveBucket(path, clientKey);
         if (bucket != null) {
             if (!bucket.tryConsume(1)) {
-                response.setStatus(429);
-                response.setContentType("application/json");
-                response.getWriter().write("{\"error\":\"Too many requests. Please try again later.\"}");
+                writeTooManyRequests(request, response);
                 return;
             }
         }
@@ -102,5 +110,21 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 .refillGreedy(capacity, Duration.ofMinutes(periodMinutes))
                 .build();
         return Bucket.builder().addLimit(limit).build();
+    }
+
+    /**
+     * This filter runs before Spring Security's {@code CorsFilter}. Without CORS headers, browsers
+     * report a network error ("Failed to fetch") for cross-origin responses such as 429.
+     */
+    private void writeTooManyRequests(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        if (CorsUtils.isCorsRequest(request)) {
+            CorsConfiguration config = corsConfigurationSource.getCorsConfiguration(request);
+            if (config != null) {
+                this.corsProcessor.processRequest(config, request, response);
+            }
+        }
+        response.setStatus(429);
+        response.setContentType("application/json");
+        response.getWriter().write("{\"error\":\"Too many requests. Please try again later.\"}");
     }
 }
