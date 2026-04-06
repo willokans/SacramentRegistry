@@ -88,11 +88,12 @@ jobs:
           SENTRY_RELEASE_PROD: ${{ secrets.SENTRY_RELEASE_PROD }}
           API_SENTRY_TEST_ENDPOINT_ENABLED_PROD: ${{ secrets.API_SENTRY_TEST_ENDPOINT_ENABLED_PROD }}
           API_SENTRY_TEST_ENDPOINT_KEY_PROD: ${{ secrets.API_SENTRY_TEST_ENDPOINT_KEY_PROD }}
-          SMTP_HOST_PROD: ${{ secrets.SMTP_HOST_PROD }}
-          SMTP_USERNAME_PROD: ${{ secrets.SMTP_USERNAME_PROD }}
-          SMTP_PASSWORD_PROD: ${{ secrets.SMTP_PASSWORD_PROD }}
-          SMTP_PORT_PROD: ${{ secrets.SMTP_PORT_PROD }}
-          APP_INVITATION_ACCEPT_BASE_URL_PROD: ${{ secrets.APP_INVITATION_ACCEPT_BASE_URL_PROD }}
+          # Prefer *_PROD; fall back to unsuffixed names (same values as staging / Pre Postgres copy-paste)
+          SMTP_HOST_PROD: ${{ secrets.SMTP_HOST_PROD || secrets.SMTP_HOST }}
+          SMTP_USERNAME_PROD: ${{ secrets.SMTP_USERNAME_PROD || secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD_PROD: ${{ secrets.SMTP_PASSWORD_PROD || secrets.SMTP_PASSWORD }}
+          SMTP_PORT_PROD: ${{ secrets.SMTP_PORT_PROD || secrets.SMTP_PORT }}
+          APP_INVITATION_ACCEPT_BASE_URL_PROD: ${{ secrets.APP_INVITATION_ACCEPT_BASE_URL_PROD || secrets.APP_INVITATION_ACCEPT_BASE_URL }}
         run: |
           set -euo pipefail
           APP_NAME="church-registry-api"
@@ -100,6 +101,7 @@ jobs:
           # Pre Postgres: use staging credentials. Post Postgres: use prod credentials.
           # All _PROD secrets must be set in GitHub (copy from staging for Pre Postgres).
           # SMTP + invitation URL: required so Spring prod profile starts (ProductionInvitationEmailPolicyValidator + application-prod.yaml).
+          # Values come from *_PROD or unsuffixed SMTP_HOST / APP_INVITATION_ACCEPT_BASE_URL (see env: above).
           required=(
             API_DATABASE_URL_PROD
             API_DATABASE_USERNAME_PROD
@@ -114,7 +116,13 @@ jobs:
           )
           for key in "${required[@]}"; do
             if [ -z "${!key:-}" ]; then
-              echo "Missing required GitHub secret: $key"
+              echo "::error::Missing required GitHub secret (or non-_PROD fallback for mail/invite): $key"
+              case "$key" in
+                SMTP_HOST_PROD) echo "Set SMTP_HOST_PROD or SMTP_HOST." ;;
+                SMTP_USERNAME_PROD) echo "Set SMTP_USERNAME_PROD or SMTP_USERNAME." ;;
+                SMTP_PASSWORD_PROD) echo "Set SMTP_PASSWORD_PROD or SMTP_PASSWORD." ;;
+                APP_INVITATION_ACCEPT_BASE_URL_PROD) echo "Set APP_INVITATION_ACCEPT_BASE_URL_PROD or APP_INVITATION_ACCEPT_BASE_URL (e.g. https://church-registry.fly.dev/accept-invite)." ;;
+              esac
               exit 1
             fi
           done

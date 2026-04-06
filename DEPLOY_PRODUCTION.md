@@ -40,11 +40,11 @@ Copy staging values into the `_PROD` secrets. CORS must include prod frontend UR
 | `API_JWT_SECRET_PROD` | Same as `API_JWT_SECRET` or distinct |
 | `API_CORS_ALLOWED_ORIGINS_PROD` | `https://church-registry-staging.fly.dev,https://church-registry.fly.dev` (staging + prod frontend URLs) |
 | `SUPABASE_SERVICE_ROLE_KEY_PROD` | Same as `SUPABASE_SERVICE_ROLE_KEY` |
-| `SMTP_HOST_PROD` | Same as staging SMTP host (e.g. `mail.privateemail.com`) — **required**; API `prod` profile validates mail on startup |
-| `SMTP_USERNAME_PROD` | Mailbox user (must match domain in `APP_INVITATION_EMAIL_ALLOWED_DOMAIN`, default `sacramentregistry.com`) |
-| `SMTP_PASSWORD_PROD` | SMTP password |
-| `SMTP_PORT_PROD` | Optional; default `587` if unset |
-| `APP_INVITATION_ACCEPT_BASE_URL_PROD` | Public URL prefix for accepting invites, e.g. `https://app.sacramentregistry.com/accept-invite` or `https://church-registry.fly.dev/accept-invite` during Pre Postgres |
+| `SMTP_HOST_PROD` | Same as staging SMTP host (e.g. `mail.privateemail.com`) — **required**; API `prod` profile validates mail on startup. **Or** set unsuffixed `SMTP_HOST` (workflow maps it if `SMTP_HOST_PROD` is unset). |
+| `SMTP_USERNAME_PROD` | Mailbox user (must match domain in `APP_INVITATION_EMAIL_ALLOWED_DOMAIN`, default `sacramentregistry.com`). **Or** `SMTP_USERNAME`. |
+| `SMTP_PASSWORD_PROD` | SMTP password. **Or** `SMTP_PASSWORD`. |
+| `SMTP_PORT_PROD` | Optional; default `587` if unset. **Or** `SMTP_PORT`. |
+| `APP_INVITATION_ACCEPT_BASE_URL_PROD` | Public URL prefix for accepting invites, e.g. `https://app.sacramentregistry.com/accept-invite` or `https://church-registry.fly.dev/accept-invite` during Pre Postgres. **Or** `APP_INVITATION_ACCEPT_BASE_URL`. |
 | `NEXT_PUBLIC_SUPABASE_URL_PROD` | Same as staging project URL (`https://<staging-ref>.supabase.co`) — must match the DB used for `app_users` |
 | `NEXT_PUBLIC_API_URL_PROD` | `https://church-registry-api.fly.dev` |
 | `API_SENTRY_DSN_PROD` | Sentry DSN for backend ingestion |
@@ -180,6 +180,7 @@ Use `.github/workflows/deploy-production.yml` (trigger: `push` to `main`). Requi
 | `SENTRY_RELEASE_PROD` | Release identifier (for example Git SHA) |
 | `API_SENTRY_TEST_ENDPOINT_ENABLED_PROD` | Optional toggle for backend `/api/health/sentry-test` endpoint (`true`/`false`) |
 | `API_SENTRY_TEST_ENDPOINT_KEY_PROD` | Optional shared key for backend Sentry test endpoint (`X-Sentry-Test-Key`) |
+| `SMTP_HOST_PROD`, `SMTP_USERNAME_PROD`, `SMTP_PASSWORD_PROD`, `APP_INVITATION_ACCEPT_BASE_URL_PROD` | Required for API startup in `prod`. Unsuffixed `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `APP_INVITATION_ACCEPT_BASE_URL` are accepted as fallbacks. |
 | `WEB_SENTRY_AUTH_TOKEN_PROD` | Sentry auth token for frontend source-map upload (optional, recommended) |
 | `SENTRY_ORG_PROD` | Sentry org slug for source-map upload (optional; defaults to `httpswwwwylokscom`) |
 | `SENTRY_PROJECT_FRONTEND_PROD` | Sentry frontend project slug for source-map upload (optional; defaults to `frontendsacramentregistry`) |
