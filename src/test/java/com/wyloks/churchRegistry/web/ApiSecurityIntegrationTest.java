@@ -1,15 +1,23 @@
 package com.wyloks.churchRegistry.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.wyloks.churchRegistry.config.IntegrationTestMailConfig;
+import com.wyloks.churchRegistry.dto.ForgotPasswordResponse;
+import com.wyloks.churchRegistry.entity.PasswordResetToken;
+import com.wyloks.churchRegistry.repository.AppUserRepository;
+import com.wyloks.churchRegistry.repository.PasswordResetTokenRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.jdbc.Sql;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -20,6 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(IntegrationTestMailConfig.class)
 class ApiSecurityIntegrationTest {
 
     @Autowired
@@ -27,6 +36,12 @@ class ApiSecurityIntegrationTest {
 
     @Autowired
     ObjectMapper objectMapper;
+
+    @Autowired
+    AppUserRepository appUserRepository;
+
+    @Autowired
+    PasswordResetTokenRepository passwordResetTokenRepository;
 
     @Test
     void getDioceses_withoutToken_returns401() throws Exception {
@@ -163,14 +178,27 @@ class ApiSecurityIntegrationTest {
 
     @Test
     @Transactional
-    void forgotPassword_returnsToken_whenEmailExists() throws Exception {
-        ResultActions result = mvc.perform(post("/api/auth/forgot-password")
+    @Sql(
+            statements = "UPDATE app_user SET email = 'admin-forgot-test@example.com' WHERE username = 'admin'",
+            executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
+    @Sql(
+            statements = "UPDATE app_user SET email = 'admin@church_registry.com' WHERE username = 'admin'",
+            executionPhase = Sql.ExecutionPhase.AFTER_TEST_METHOD)
+    void forgotPassword_createsToken_whenEmailExists_responseHasNoToken() throws Exception {
+        // Seed data uses admin@church_registry.com; Jakarta Mail rejects underscores in the domain part.
+        mvc.perform(post("/api/auth/forgot-password")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"identifier\":\"admin@church_registry.com\"}"))
+                        .content("{\"identifier\":\"admin\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.token").exists())
-                .andExpect(jsonPath("$.expiresAt").exists());
-        String token = objectMapper.readTree(result.andReturn().getResponse().getContentAsString()).get("token").asText();
+                .andExpect(jsonPath("$.message").value(ForgotPasswordResponse.MESSAGE))
+                .andExpect(jsonPath("$.token").doesNotExist());
+
+        var admin = appUserRepository.findByUsernameIgnoreCase("admin").orElseThrow();
+        PasswordResetToken stored = passwordResetTokenRepository.findAll().stream()
+                .filter(t -> t.getUser().getId().equals(admin.getId()))
+                .findFirst()
+                .orElseThrow();
+        String token = stored.getTokenValue();
 
         mvc.perform(post("/api/auth/reset-password-by-token")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -190,11 +218,18 @@ class ApiSecurityIntegrationTest {
     }
 
     @Test
-    void forgotPassword_withUnknownEmail_returns400() throws Exception {
+    @Transactional
+    void forgotPassword_withUnknownEmail_returns200AndGenericMessage() throws Exception {
+        long tokenCountBefore = passwordResetTokenRepository.count();
+
         mvc.perform(post("/api/auth/forgot-password")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"identifier\":\"unknown@example.com\"}"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value(ForgotPasswordResponse.MESSAGE))
+                .andExpect(jsonPath("$.token").doesNotExist());
+
+        assertThat(passwordResetTokenRepository.count()).isEqualTo(tokenCountBefore);
     }
 
     @Test

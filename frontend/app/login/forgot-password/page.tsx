@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { forgotPassword } from '@/lib/api';
 
 function CrossIcon({ className }: { className?: string }) {
@@ -25,20 +24,21 @@ const backToSignInLinkClass =
   'text-sm font-medium text-sancta-maroon underline-offset-2 decoration-transparent transition-colors duration-150 hover:text-sancta-maroon-dark hover:underline hover:decoration-sancta-maroon/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sancta-maroon/30 focus-visible:ring-offset-2 rounded-sm';
 
 export default function ForgotPasswordPage() {
-  const router = useRouter();
   const [identifier, setIdentifier] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
     try {
-      const { token } = await forgotPassword(identifier.trim());
-      router.push(`/reset-password?token=${encodeURIComponent(token)}`);
+      const { message } = await forgotPassword(identifier.trim());
+      setSuccessMessage(message);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to request password reset');
+    } finally {
       setSubmitting(false);
     }
   }
@@ -59,61 +59,86 @@ export default function ForgotPasswordPage() {
         <div className="w-full max-w-md rounded-lg border border-gray-300/90 bg-white p-7 shadow-[0_1px_3px_rgba(0,0,0,0.05),0_10px_28px_rgba(0,0,0,0.075)] sm:p-9">
           <div className="mb-6">
             <h1 className="font-serif text-xl font-semibold text-sancta-maroon sm:text-2xl">Forgot password</h1>
-            <p className="mt-1 text-sm text-gray-600">
-              Enter your username. You&apos;ll continue to the next step to choose a new password.
-            </p>
+            {!successMessage && (
+              <p className="mt-1 text-sm text-gray-600">
+                Enter your username. If an account exists, we&apos;ll email password reset instructions to the address on
+                file.
+              </p>
+            )}
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="identifier" className="mb-1 block text-xs font-medium text-gray-500">
-                Username
-              </label>
-              <input
-                id="identifier"
-                type="text"
-                value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
-                required
-                autoComplete="username"
-                placeholder="Enter your username"
-                className={inputClass}
-              />
-            </div>
-
-            {error && (
+          {successMessage ? (
+            <div className="space-y-5">
               <div
-                role="alert"
-                className="rounded-md border border-stone-200 bg-stone-50 px-3 py-2.5 text-sm text-stone-800"
+                role="status"
+                className="rounded-md border border-emerald-200/90 bg-emerald-50/90 px-3 py-3 text-sm text-emerald-950"
               >
-                {error}
+                {successMessage}
               </div>
-            )}
-
-            <div className="pt-2">
-              <button type="submit" disabled={submitting} className={primaryButtonClass}>
-                {submitting && (
-                  <svg className="h-4 w-4 shrink-0 animate-spin text-white" fill="none" viewBox="0 0 24 24" aria-hidden>
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                    />
-                  </svg>
-                )}
-                {submitting ? 'Sending…' : 'Reset Password'}
-              </button>
-            </div>
-
-            <div className="border-t border-gray-100 pt-5">
               <p className="text-center">
-                <Link href="/login" className={`${backToSignInLinkClass} inline-flex min-h-[44px] items-center justify-center py-1`}>
+                <Link
+                  href="/login"
+                  className={`${backToSignInLinkClass} inline-flex min-h-[44px] items-center justify-center py-1`}
+                >
                   Back to Sign In
                 </Link>
               </p>
             </div>
-          </form>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="identifier" className="mb-1 block text-xs font-medium text-gray-500">
+                  Username
+                </label>
+                <input
+                  id="identifier"
+                  type="text"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  required
+                  autoComplete="username"
+                  placeholder="Enter your username"
+                  className={inputClass}
+                />
+              </div>
+
+              {error && (
+                <div
+                  role="alert"
+                  className="rounded-md border border-stone-200 bg-stone-50 px-3 py-2.5 text-sm text-stone-800"
+                >
+                  {error}
+                </div>
+              )}
+
+              <div className="pt-2">
+                <button type="submit" disabled={submitting} className={primaryButtonClass}>
+                  {submitting && (
+                    <svg className="h-4 w-4 shrink-0 animate-spin text-white" fill="none" viewBox="0 0 24 24" aria-hidden>
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                      />
+                    </svg>
+                  )}
+                  {submitting ? 'Sending…' : 'Reset Password'}
+                </button>
+              </div>
+
+              <div className="border-t border-gray-100 pt-5">
+                <p className="text-center">
+                  <Link
+                    href="/login"
+                    className={`${backToSignInLinkClass} inline-flex min-h-[44px] items-center justify-center py-1`}
+                  >
+                    Back to Sign In
+                  </Link>
+                </p>
+              </div>
+            </form>
+          )}
 
           <p className="mt-4 text-center text-xs text-gray-500">
             Need help? Contact your parish administrator for access, invitations, or account questions.

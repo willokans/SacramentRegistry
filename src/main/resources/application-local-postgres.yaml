@@ -38,6 +38,12 @@ app:
     email:
       from: ${APP_INVITATION_EMAIL_FROM:onboarding@sacramentregistry.com}
       allowed-domain: ${APP_INVITATION_EMAIL_ALLOWED_DOMAIN:sacramentregistry.com}
+      support: ${APP_INVITATION_EMAIL_SUPPORT:support@sacramentregistry.com}
+  password-reset:
+    public-base-url: ${APP_PASSWORD_RESET_PUBLIC_BASE_URL:http://localhost:3000}
+    email:
+      from: ${APP_PASSWORD_RESET_EMAIL_FROM:${APP_INVITATION_EMAIL_FROM:onboarding@sacramentregistry.com}}
+      support: ${APP_PASSWORD_RESET_EMAIL_SUPPORT:${APP_INVITATION_EMAIL_SUPPORT:support@sacramentregistry.com}}
   user-invitation:
     resend-cooldown-ms: ${APP_USER_INVITATION_RESEND_COOLDOWN_MS:900000}
     expose-token-in-response: ${APP_USER_INVITATION_EXPOSE_TOKEN_IN_RESPONSE:true}

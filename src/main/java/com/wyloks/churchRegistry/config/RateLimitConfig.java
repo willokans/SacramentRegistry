@@ -18,6 +18,8 @@ public class RateLimitConfig {
             CorsConfigurationSource corsConfigurationSource,
             @Value("${app.rate-limit.login.limit:5}") int loginLimit,
             @Value("${app.rate-limit.login.period-minutes:15}") int loginPeriodMinutes,
+            @Value("${app.rate-limit.forgot-password.limit:5}") int forgotPasswordLimit,
+            @Value("${app.rate-limit.forgot-password.period-minutes:15}") int forgotPasswordPeriodMinutes,
             @Value("${app.rate-limit.refresh.limit:15}") int refreshLimit,
             @Value("${app.rate-limit.refresh.period-minutes:1}") int refreshPeriodMinutes,
             @Value("${app.rate-limit.api.limit:300}") int apiLimit,
@@ -25,6 +27,8 @@ public class RateLimitConfig {
         return new RateLimitFilter(
                 loginLimit,
                 loginPeriodMinutes,
+                forgotPasswordLimit,
+                forgotPasswordPeriodMinutes,
                 refreshLimit,
                 refreshPeriodMinutes,
                 apiLimit,
