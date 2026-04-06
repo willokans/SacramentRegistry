@@ -24,6 +24,17 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     @Query("SELECT u FROM AppUser u WHERE u.username = :identifier OR u.email = :identifier")
     Optional<AppUser> findByUsernameOrEmail(@Param("identifier") String identifier);
 
+    /**
+     * Login / identifier resolution: matches forgot-password behavior (case-insensitive username and email).
+     */
+    @EntityGraph(attributePaths = {"parish", "parishAccesses"})
+    @Query("""
+            SELECT u FROM AppUser u
+            WHERE LOWER(TRIM(u.username)) = LOWER(TRIM(:identifier))
+               OR (u.email IS NOT NULL AND TRIM(u.email) <> '' AND LOWER(TRIM(u.email)) = LOWER(TRIM(:identifier)))
+            """)
+    Optional<AppUser> findByUsernameOrEmailIgnoreCase(@Param("identifier") String identifier);
+
     @EntityGraph(attributePaths = {"parish", "parishAccesses"})
     Optional<AppUser> findByEmail(String email);
 

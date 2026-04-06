@@ -52,9 +52,10 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public LoginResponse login(String username, String password) {
+        String identifier = username != null ? username.trim() : "";
         final AppUser user;
         try {
-            user = appUserRepository.findByUsernameOrEmail(username)
+            user = appUserRepository.findByUsernameOrEmailIgnoreCase(identifier)
                     .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
         } catch (BadCredentialsException e) {
             throw e;

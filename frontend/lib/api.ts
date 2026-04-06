@@ -74,7 +74,28 @@ export async function login(username: string, password: string) {
     if (res.status >= 500) {
       throw new Error('The sign-in service is temporarily unavailable. Please try again in a few minutes.');
     }
-    throw new Error(parseErrorResponse(text, 'Sign-in did not complete. Please try again.'));
+    if (res.status === 403) {
+      throw new Error(
+        parseErrorResponse(
+          text,
+          'Sign-in was blocked (forbidden). This often means a proxy or firewall rejected the request, or the browser origin is not allowed by the API. Verify NEXT_PUBLIC_API_URL and CORS settings, then try again.',
+        ),
+      );
+    }
+    if (res.status === 400) {
+      throw new Error(
+        parseErrorResponse(
+          text,
+          'Sign-in could not start because the request was not accepted. Check that both fields are filled in and try again.',
+        ),
+      );
+    }
+    throw new Error(
+      parseErrorResponse(
+        text,
+        `Sign-in did not complete (HTTP ${res.status}). Please try again, or contact support if this continues.`,
+      ),
+    );
   }
   return res.json();
 }
