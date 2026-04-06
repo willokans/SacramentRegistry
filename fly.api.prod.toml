@@ -16,9 +16,10 @@ primary_region = "jnb"  # Johannesburg - closest to Nigeria
   cpus = 1
   memory_mb = 1024
 
-# Explicit command ensures we bind to 0.0.0.0 (required for Fly proxy)
+# Explicit command ensures we bind to 0.0.0.0 (required for Fly proxy).
+# Use literal 8080: ${PORT} is not reliably expanded in [processes] on Machines, which can prevent the JVM from starting.
 [processes]
-  app = "java -Dserver.port=${PORT} -Dserver.address=0.0.0.0 -jar /app/app.jar"
+  app = "java -Dserver.port=8080 -Dserver.address=0.0.0.0 -jar /app/app.jar"
 
 [env]
   PORT = "8080"
