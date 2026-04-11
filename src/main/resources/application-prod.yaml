@@ -67,6 +67,8 @@ app:
     expose-token-in-response: false
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS}
+    # e.g. https://*.sacramentregistry.com so app./staging. hosts match preflight (OPTIONS) — see CORS_ALLOWED_ORIGIN_PATTERNS on Fly
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:}
   jwt:
     secret: ${JWT_SECRET}
     expiration-ms: ${JWT_EXPIRATION_MS:3600000}

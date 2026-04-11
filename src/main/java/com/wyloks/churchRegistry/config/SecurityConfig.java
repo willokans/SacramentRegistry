@@ -49,6 +49,7 @@ public class SecurityConfig {
                                     + "\",\"message\":\"" + escapedMessage + "\"}");
                         }))
                 .authorizeHttpRequests(a -> a
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/health").permitAll()
                         .requestMatchers("/api/health/sentry-test").permitAll()
                         .requestMatchers("/error").permitAll()
