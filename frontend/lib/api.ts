@@ -36,17 +36,43 @@ function loginNetworkUserMessage(error: unknown): string {
     lower.includes('networkerror') ||
     lower.includes('load failed') ||
     lower.includes('network request failed') ||
-    lower.includes('fetch failed')
+    lower.includes('fetch failed') ||
+    lower.includes('loadfail') ||
+    lower.includes('access control') ||
+    lower.includes('cors') ||
+    lower.includes('blocked by cors') ||
+    lower.includes('cross-origin') ||
+    (lower.includes('network') && lower.includes('error'))
   ) {
-    return 'We could not reach the server. Check your internet connection and try again. If this keeps happening, contact your parish administrator.';
+    return (
+      'We could not reach the sign-in service from your browser. This is often a network issue, a wrong API URL for this site, or the API blocking cross-origin requests (CORS). ' +
+      'If you are an administrator, confirm NEXT_PUBLIC_API_URL in the deployed frontend matches the live API and that app.cors.allowed-origins includes this website’s origin. ' +
+      'Otherwise, check your connection or try again later.'
+    );
   }
   if (msg.includes('NEXT_PUBLIC_API_URL') || msg.includes('Missing NEXT_PUBLIC_API_URL')) {
     return 'This site is not fully set up for sign-in yet. Please contact support.';
   }
-  return 'Sign-in did not complete. Please try again.';
+  return (
+    'Sign-in did not complete because the request failed before the server responded. ' +
+    `Technical detail: ${msg || 'unknown error'}. ` +
+    'Open your browser’s developer tools → Network, try again, and inspect the login request; or contact support with that status or error text.'
+  );
 }
 
-export async function login(username: string, password: string) {
+/** Shape of POST /api/auth/login success JSON (fields optional where older APIs omit them). */
+export type LoginApiResponse = {
+  token?: string;
+  refreshToken?: string;
+  username?: string;
+  displayName?: string | null;
+  role?: string | null;
+  defaultParishId?: number | null;
+  mustResetPassword?: boolean;
+  user?: { username: string; displayName?: string | null; role?: string | null };
+};
+
+export async function login(username: string, password: string): Promise<LoginApiResponse> {
   let res: Response;
   try {
     res = await fetchWithRetry(`${getBaseUrl()}/api/auth/login`, {
@@ -97,7 +123,15 @@ export async function login(username: string, password: string) {
       ),
     );
   }
-  return res.json();
+  let payload: unknown;
+  try {
+    payload = await res.json();
+  } catch {
+    throw new Error(
+      'The sign-in service returned a non-JSON response. The frontend API URL may be wrong (NEXT_PUBLIC_API_URL), or a proxy may be serving HTML instead of the API. Ask an administrator to verify the deployed API base URL and CORS settings.',
+    );
+  }
+  return payload as LoginApiResponse;
 }
 
 const TOKEN_STORAGE_KEY = 'church_registry_token';

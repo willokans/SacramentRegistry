@@ -21,6 +21,13 @@ public class CorsConfig {
     @Value("${app.cors.allowed-origins:http://localhost:3000}")
     private String allowedOrigins;
 
+    /**
+     * Optional comma-separated Ant-style origin patterns (Spring CORS), e.g. {@code https://*.sacramentregistry.com}
+     * so {@code app.}, {@code staging.}, etc. work without listing each host in {@code allowed-origins}.
+     */
+    @Value("${app.cors.allowed-origin-patterns:}")
+    private String allowedOriginPatterns;
+
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
@@ -30,6 +37,13 @@ public class CorsConfig {
                 .toList();
         List<String> effective = origins.isEmpty() ? List.of("http://localhost:3000") : expandWwwApexMirrors(origins);
         config.setAllowedOrigins(effective);
+        List<String> patterns = Arrays.stream(allowedOriginPatterns.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+        if (!patterns.isEmpty()) {
+            config.setAllowedOriginPatterns(patterns);
+        }
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         config.setExposedHeaders(List.of("Authorization"));

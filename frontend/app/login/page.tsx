@@ -66,16 +66,27 @@ export default function LoginPage() {
       const res = await login(username, password);
       const token = res?.token;
       const refreshToken = res?.refreshToken;
-      const user = res?.user ?? (res && 'username' in res
-        ? { username: res.username, displayName: res.displayName ?? null, role: res.role ?? null }
-        : null);
-      if (!token || !user) {
+      const user =
+        res?.user ??
+        (res && typeof res.username === 'string' && res.username.trim() !== ''
+          ? {
+              username: res.username.trim(),
+              displayName: res.displayName ?? null,
+              role: res.role ?? null,
+            }
+          : null);
+      if (!token || !refreshToken || !user) {
         throw new Error(
           'We could not finish signing you in because of an unexpected response. Please try again, or contact your parish administrator.',
         );
       }
+      const sessionUser = {
+        username: user.username,
+        displayName: user.displayName ?? null,
+        role: user.role ?? null,
+      };
       setRememberDevicePreference(rememberDevice);
-      storeAuth(token, refreshToken, user);
+      storeAuth(token, refreshToken, sessionUser);
       const defaultParishId = res?.defaultParishId != null ? Number(res.defaultParishId) : null;
       setStoredParishId(defaultParishId);
       if (res?.mustResetPassword) {

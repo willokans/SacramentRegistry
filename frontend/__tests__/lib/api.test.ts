@@ -571,7 +571,7 @@ describe('login', () => {
     global.fetch = jest.fn().mockRejectedValue(new TypeError('Failed to fetch'));
 
     await expect(login('a', 'b')).rejects.toThrow(
-      /We could not reach the server\. Check your internet connection/i,
+      /could not reach the sign-in service.*CORS|NEXT_PUBLIC_API_URL/i,
     );
     expect(global.fetch).toHaveBeenCalled();
   });
