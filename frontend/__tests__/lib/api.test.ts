@@ -567,12 +567,30 @@ describe('login', () => {
     await expect(login('a', 'b')).rejects.toThrow('Account is locked.');
   });
 
-  it('maps Failed to fetch to a user-friendly network message after retries', async () => {
+  it('maps Failed to fetch to a plain-language message after retries', async () => {
     global.fetch = jest.fn().mockRejectedValue(new TypeError('Failed to fetch'));
 
     await expect(login('a', 'b')).rejects.toThrow(
-      /could not reach the sign-in service.*CORS|NEXT_PUBLIC_API_URL/i,
+      /couldn't connect to sign you in.*parish administrator/i,
     );
     expect(global.fetch).toHaveBeenCalled();
+  });
+
+  it('maps Failed to fetch with host suffix (Chromium) to the same plain-language message', async () => {
+    global.fetch = jest
+      .fn()
+      .mockRejectedValue(new TypeError('Failed to fetch (api.sacramentregistry.com)'));
+
+    await expect(login('a', 'b')).rejects.toThrow(/couldn't connect to sign you in/i);
+  });
+
+  it('maps 403 on login to a plain-language message', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      text: () => Promise.resolve(''),
+    });
+
+    await expect(login('a', 'b')).rejects.toThrow(/couldn't complete sign-in from this browser/i);
   });
 });
