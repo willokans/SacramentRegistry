@@ -45,7 +45,9 @@ public class CorsConfig {
             config.setAllowedOriginPatterns(patterns);
         }
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        // Wildcard: browsers may send Access-Control-Request-Headers with extras (e.g. baggage, sentry-trace).
+        // A fixed list causes preflight 403 when any requested header is not listed.
+        config.setAllowedHeaders(List.of("*"));
         config.setExposedHeaders(List.of("Authorization"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

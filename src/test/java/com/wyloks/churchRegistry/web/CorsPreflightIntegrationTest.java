@@ -60,4 +60,15 @@ class CorsPreflightIntegrationTest {
                         .header("Access-Control-Request-Headers", "content-type"))
                 .andExpect(status().isForbidden());
     }
+
+    @Test
+    void optionsLogin_extraRequestedHeaders_stillOk() throws Exception {
+        String origin = "https://app.sacramentregistry.com";
+        mvc.perform(options("/api/auth/login")
+                        .header("Origin", origin)
+                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "content-type, baggage, sentry-trace"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", origin));
+    }
 }
