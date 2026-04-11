@@ -13,5 +13,7 @@ COPY --from=build /app/target/*.jar app.jar
 ENV PORT=8080
 EXPOSE 8080
 
-# 8080 matches fly.api*.toml internal_port; sh -c expands ${PORT} when [processes] is not used.
-ENTRYPOINT ["sh", "-c", "java -Dserver.port=${PORT:-8080} -Dserver.address=0.0.0.0 -jar /app/app.jar"]
+# CMD only: Fly [processes] replaces CMD. An ENTRYPOINT + [processes] concatenates and can run
+# `java ... app.jar java ... app.jar` (see Fly machine logs).
+# 8080 matches fly.api*.toml internal_port; PORT env is still set for Spring if needed.
+CMD ["java", "-Dserver.port=8080", "-Dserver.address=0.0.0.0", "-jar", "/app/app.jar"]
