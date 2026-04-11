@@ -71,4 +71,16 @@ class CorsConfigTest {
         Mockito.when(env.getActiveProfiles()).thenReturn(new String[] {"default"});
         assertThat(CorsConfig.effectiveAllowedOriginPatterns("", env)).isEmpty();
     }
+
+    @Test
+    void normalizeOriginToken_stripsTrailingSlashOnHttpsOrigin() {
+        assertThat(CorsConfig.normalizeOriginToken("https://sacramentregistry.com/"))
+                .isEqualTo("https://sacramentregistry.com");
+    }
+
+    @Test
+    void normalizeOriginToken_leavesOriginWithoutSlash() {
+        assertThat(CorsConfig.normalizeOriginToken("https://sacramentregistry.com"))
+                .isEqualTo("https://sacramentregistry.com");
+    }
 }

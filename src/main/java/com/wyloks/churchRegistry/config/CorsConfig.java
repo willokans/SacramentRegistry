@@ -8,6 +8,8 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -17,6 +19,7 @@ import java.util.Locale;
 import java.util.Set;
 
 @Configuration
+@Slf4j
 public class CorsConfig {
 
     @Value("${app.cors.allowed-origins:http://localhost:3000}")
@@ -39,7 +42,7 @@ public class CorsConfig {
         CorsConfiguration config = new CorsConfiguration();
         String originsRaw = effectiveAllowedOrigins(allowedOrigins, environment);
         List<String> origins = Arrays.stream(originsRaw.split(","))
-                .map(String::trim)
+                .map(CorsConfig::normalizeOriginToken)
                 .filter(s -> !s.isEmpty())
                 .toList();
         List<String> effective = origins.isEmpty() ? List.of("http://localhost:3000") : expandWwwApexMirrors(origins);
@@ -47,12 +50,19 @@ public class CorsConfig {
 
         String patternsRaw = effectiveAllowedOriginPatterns(allowedOriginPatterns, environment);
         List<String> patterns = Arrays.stream(patternsRaw.split(","))
-                .map(String::trim)
+                .map(CorsConfig::normalizeOriginToken)
                 .filter(s -> !s.isEmpty())
                 .toList();
         if (!patterns.isEmpty()) {
             config.setAllowedOriginPatterns(patterns);
         }
+
+        log.info(
+                "CORS active: {} exact origin(s), {} pattern(s) — if browser preflight gets 403, check these match the Origin header (see fly logs)",
+                effective.size(),
+                patterns.size());
+        log.debug("CORS allowed origins: {}", effective);
+        log.debug("CORS allowed origin patterns: {}", patterns);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         // Wildcard: browsers may send Access-Control-Request-Headers with extras (e.g. baggage, sentry-trace).
         // A fixed list causes preflight 403 when any requested header is not listed.
@@ -60,8 +70,26 @@ public class CorsConfig {
         config.setExposedHeaders(List.of("Authorization"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/api/**", config);
+        // Register on /** so every path (including /api/...) is covered; avoids edge cases where only /api/** did not apply.
+        source.registerCorsConfiguration("/**", config);
         return source;
+    }
+
+    /** Trim and strip trailing path slashes so {@code https://example.com/} matches browser {@code Origin: https://example.com}. */
+    static String normalizeOriginToken(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String t = raw.trim();
+        int scheme = t.indexOf("://");
+        if (scheme < 0) {
+            return t;
+        }
+        String afterScheme = t.substring(scheme + 3);
+        if (afterScheme.isEmpty() || "/".equals(afterScheme)) {
+            return t;
+        }
+        return t.replaceAll("/+$", "");
     }
 
     static boolean isDeployedProfile(Environment env) {
