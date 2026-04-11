@@ -1,6 +1,8 @@
 package com.wyloks.churchRegistry.config;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.core.env.Environment;
 
 import java.util.List;
 
@@ -30,5 +32,43 @@ class CorsConfigTest {
     void expandWwwApexMirrors_preservesFlyDev() {
         assertThat(CorsConfig.expandWwwApexMirrors(List.of("https://church-registry.fly.dev")))
                 .containsExactly("https://church-registry.fly.dev");
+    }
+
+    @Test
+    void effectiveAllowedOrigins_blankWhenDeployed_usesSacramentRegistry() {
+        Environment env = Mockito.mock(Environment.class);
+        Mockito.when(env.getActiveProfiles()).thenReturn(new String[] {"prod"});
+        assertThat(CorsConfig.effectiveAllowedOrigins("", env))
+                .isEqualTo("https://sacramentregistry.com,https://www.sacramentregistry.com");
+        assertThat(CorsConfig.effectiveAllowedOrigins("   ", env))
+                .isEqualTo("https://sacramentregistry.com,https://www.sacramentregistry.com");
+    }
+
+    @Test
+    void effectiveAllowedOrigins_blankWhenLocal_usesLocalhost() {
+        Environment env = Mockito.mock(Environment.class);
+        Mockito.when(env.getActiveProfiles()).thenReturn(new String[] {"default"});
+        assertThat(CorsConfig.effectiveAllowedOrigins("", env)).isEqualTo("http://localhost:3000");
+    }
+
+    @Test
+    void effectiveAllowedOrigins_nonBlank_unchanged() {
+        Environment env = Mockito.mock(Environment.class);
+        Mockito.when(env.getActiveProfiles()).thenReturn(new String[] {"prod"});
+        assertThat(CorsConfig.effectiveAllowedOrigins("https://custom.example", env)).isEqualTo("https://custom.example");
+    }
+
+    @Test
+    void effectiveAllowedPatterns_blankWhenDeployed_usesSubdomainPattern() {
+        Environment env = Mockito.mock(Environment.class);
+        Mockito.when(env.getActiveProfiles()).thenReturn(new String[] {"staging"});
+        assertThat(CorsConfig.effectiveAllowedOriginPatterns("", env)).isEqualTo("https://*.sacramentregistry.com");
+    }
+
+    @Test
+    void effectiveAllowedPatterns_blankWhenLocal_empty() {
+        Environment env = Mockito.mock(Environment.class);
+        Mockito.when(env.getActiveProfiles()).thenReturn(new String[] {"default"});
+        assertThat(CorsConfig.effectiveAllowedOriginPatterns("", env)).isEmpty();
     }
 }

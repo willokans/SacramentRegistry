@@ -3,6 +3,7 @@ package com.wyloks.churchRegistry.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -28,16 +29,24 @@ public class CorsConfig {
     @Value("${app.cors.allowed-origin-patterns:}")
     private String allowedOriginPatterns;
 
+    /**
+     * Fly/env often sets {@code CORS_ALLOWED_ORIGINS=} (empty string). That overrides YAML defaults but still
+     * resolves to a blank property, so {@code @Value} defaults never apply — we previously fell through to
+     * localhost-only and browsers on production origins got OPTIONS 403.
+     */
     @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
+    public CorsConfigurationSource corsConfigurationSource(Environment environment) {
         CorsConfiguration config = new CorsConfiguration();
-        List<String> origins = Arrays.stream(allowedOrigins.split(","))
+        String originsRaw = effectiveAllowedOrigins(allowedOrigins, environment);
+        List<String> origins = Arrays.stream(originsRaw.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .toList();
         List<String> effective = origins.isEmpty() ? List.of("http://localhost:3000") : expandWwwApexMirrors(origins);
         config.setAllowedOrigins(effective);
-        List<String> patterns = Arrays.stream(allowedOriginPatterns.split(","))
+
+        String patternsRaw = effectiveAllowedOriginPatterns(allowedOriginPatterns, environment);
+        List<String> patterns = Arrays.stream(patternsRaw.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .toList();
@@ -53,6 +62,40 @@ public class CorsConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", config);
         return source;
+    }
+
+    static boolean isDeployedProfile(Environment env) {
+        if (env == null) {
+            return false;
+        }
+        for (String p : env.getActiveProfiles()) {
+            if (p == null) {
+                continue;
+            }
+            String pl = p.toLowerCase(Locale.ROOT);
+            if (pl.contains("prod") || pl.contains("staging") || "production".equals(pl)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static String effectiveAllowedOrigins(String configured, Environment environment) {
+        String t = configured == null ? "" : configured.trim();
+        if (!t.isEmpty()) {
+            return t;
+        }
+        return isDeployedProfile(environment)
+                ? "https://sacramentregistry.com,https://www.sacramentregistry.com"
+                : "http://localhost:3000";
+    }
+
+    static String effectiveAllowedOriginPatterns(String configured, Environment environment) {
+        String t = configured == null ? "" : configured.trim();
+        if (!t.isEmpty()) {
+            return t;
+        }
+        return isDeployedProfile(environment) ? "https://*.sacramentregistry.com" : "";
     }
 
     /**

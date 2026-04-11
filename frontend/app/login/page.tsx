@@ -77,7 +77,7 @@ export default function LoginPage() {
           : null);
       if (!token || !refreshToken || !user) {
         throw new Error(
-          'We could not finish signing you in because of an unexpected response. Please try again, or contact your parish administrator.',
+          "We couldn't complete sign-in. Please try again. If this continues, contact your parish administrator.",
         );
       }
       const sessionUser = {
@@ -95,7 +95,11 @@ export default function LoginPage() {
       }
       window.location.href = '/dashboard';
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign-in did not complete. Please try again.');
+      setError(
+        err instanceof Error
+          ? err.message
+          : "We couldn't complete sign-in. Please try again. If this continues, contact your parish administrator.",
+      );
       setSubmitting(false);
     }
   }

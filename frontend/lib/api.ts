@@ -27,12 +27,40 @@ function getBaseUrl(): string {
   }
 }
 
+/** Shown when the browser cannot complete the sign-in request (network, CORS, wrong URL, etc.). */
+const LOGIN_COULD_NOT_CONNECT =
+  "We couldn't connect to sign you in. Check your internet connection and try again. If this keeps happening, contact your parish administrator.";
+
+const LOGIN_SITE_NOT_CONFIGURED =
+  'This site is not fully set up for sign-in yet. Please contact your parish administrator.';
+
+const LOGIN_COULD_NOT_COMPLETE =
+  "We couldn't complete sign-in. Please try again in a moment. If this keeps happening, contact your parish administrator.";
+
+const LOGIN_BLOCKED_OR_POLICY =
+  "We couldn't complete sign-in from this browser. Please try again later. If this continues, contact your parish administrator.";
+
+const LOGIN_UNEXPECTED_SERVICE_RESPONSE =
+  "We couldn't complete sign-in because something went wrong. Please try again later. If this continues, contact your parish administrator.";
+
+/** Prefer a short JSON API message when safe; otherwise use fallback (avoid HTML / stack traces in the UI). */
+function loginSafeApiMessage(responseText: string, fallback: string): string {
+  const raw = parseErrorResponse(responseText, '').trim();
+  if (!raw) return fallback;
+  if (raw.length > 160) return fallback;
+  if (/<!DOCTYPE|<html[\s>]/i.test(raw)) return fallback;
+  return raw;
+}
+
 /** Maps network / configuration errors from fetch to a message suitable for the sign-in form. */
 function loginNetworkUserMessage(error: unknown): string {
+  if (process.env.NODE_ENV === 'development') {
+    console.warn('[login] Request did not reach the server:', error);
+  }
   const msg = error instanceof Error ? error.message : String(error);
   const lower = msg.toLowerCase();
   if (
-    msg === 'Failed to fetch' ||
+    lower.includes('failed to fetch') ||
     lower.includes('networkerror') ||
     lower.includes('load failed') ||
     lower.includes('network request failed') ||
@@ -44,20 +72,12 @@ function loginNetworkUserMessage(error: unknown): string {
     lower.includes('cross-origin') ||
     (lower.includes('network') && lower.includes('error'))
   ) {
-    return (
-      'We could not reach the sign-in service from your browser. This is often a network issue, a wrong API URL for this site, or the API blocking cross-origin requests (CORS). ' +
-      'If you are an administrator, confirm NEXT_PUBLIC_API_URL in the deployed frontend matches the live API and that app.cors.allowed-origins includes this website’s origin. ' +
-      'Otherwise, check your connection or try again later.'
-    );
+    return LOGIN_COULD_NOT_CONNECT;
   }
   if (msg.includes('NEXT_PUBLIC_API_URL') || msg.includes('Missing NEXT_PUBLIC_API_URL')) {
-    return 'This site is not fully set up for sign-in yet. Please contact support.';
+    return LOGIN_SITE_NOT_CONFIGURED;
   }
-  return (
-    'Sign-in did not complete because the request failed before the server responded. ' +
-    `Technical detail: ${msg || 'unknown error'}. ` +
-    'Open your browser’s developer tools → Network, try again, and inspect the login request; or contact support with that status or error text.'
-  );
+  return LOGIN_COULD_NOT_CONNECT;
 }
 
 /** Shape of POST /api/auth/login success JSON (fields optional where older APIs omit them). */
@@ -101,35 +121,26 @@ export async function login(username: string, password: string): Promise<LoginAp
       throw new Error('The sign-in service is temporarily unavailable. Please try again in a few minutes.');
     }
     if (res.status === 403) {
-      throw new Error(
-        parseErrorResponse(
-          text,
-          'Sign-in was blocked (forbidden). This often means a proxy or firewall rejected the request, or the browser origin is not allowed by the API. Verify NEXT_PUBLIC_API_URL and CORS settings, then try again.',
-        ),
-      );
+      throw new Error(LOGIN_BLOCKED_OR_POLICY);
     }
     if (res.status === 400) {
       throw new Error(
-        parseErrorResponse(
+        loginSafeApiMessage(
           text,
-          'Sign-in could not start because the request was not accepted. Check that both fields are filled in and try again.',
+          'Sign-in could not start. Please check your username and password, then try again.',
         ),
       );
     }
-    throw new Error(
-      parseErrorResponse(
-        text,
-        `Sign-in did not complete (HTTP ${res.status}). Please try again, or contact support if this continues.`,
-      ),
-    );
+    throw new Error(loginSafeApiMessage(text, LOGIN_COULD_NOT_COMPLETE));
   }
   let payload: unknown;
   try {
     payload = await res.json();
   } catch {
-    throw new Error(
-      'The sign-in service returned a non-JSON response. The frontend API URL may be wrong (NEXT_PUBLIC_API_URL), or a proxy may be serving HTML instead of the API. Ask an administrator to verify the deployed API base URL and CORS settings.',
-    );
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[login] Response was not valid JSON (check API URL / proxy).');
+    }
+    throw new Error(LOGIN_UNEXPECTED_SERVICE_RESPONSE);
   }
   return payload as LoginApiResponse;
 }
