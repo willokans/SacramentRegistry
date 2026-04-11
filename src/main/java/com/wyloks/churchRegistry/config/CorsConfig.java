@@ -46,23 +46,26 @@ public class CorsConfig {
                 .filter(s -> !s.isEmpty())
                 .toList();
         List<String> effective = origins.isEmpty() ? List.of("http://localhost:3000") : expandWwwApexMirrors(origins);
-        config.setAllowedOrigins(effective);
+        effective = mergeDeployedSacramentRegistryExactOrigins(effective, environment);
 
         String patternsRaw = effectiveAllowedOriginPatterns(allowedOriginPatterns, environment);
         List<String> patterns = Arrays.stream(patternsRaw.split(","))
                 .map(CorsConfig::normalizeOriginToken)
                 .filter(s -> !s.isEmpty())
                 .toList();
+        patterns = mergeDeployedSacramentRegistryOriginPatterns(patterns, environment);
         if (!patterns.isEmpty()) {
             config.setAllowedOriginPatterns(patterns);
         }
 
         log.info(
-                "CORS active: {} exact origin(s), {} pattern(s) — if browser preflight gets 403, check these match the Origin header (see fly logs)",
+                "CORS active: {} exact origin(s), {} pattern(s) — on prod/staging profiles, apex + www + https://*.sacramentregistry.com are always merged (pattern alone does not match apex)",
                 effective.size(),
                 patterns.size());
         log.debug("CORS allowed origins: {}", effective);
         log.debug("CORS allowed origin patterns: {}", patterns);
+        config.setAllowedOrigins(effective);
+
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         // Wildcard: browsers may send Access-Control-Request-Headers with extras (e.g. baggage, sentry-trace).
         // A fixed list causes preflight 403 when any requested header is not listed.
@@ -124,6 +127,30 @@ public class CorsConfig {
             return t;
         }
         return isDeployedProfile(environment) ? "https://*.sacramentregistry.com" : "";
+    }
+
+    /**
+     * Fly {@code CORS_ALLOWED_ORIGINS} often lists only {@code app.} or staging hosts. The pattern
+     * {@code https://*.sacramentregistry.com} does not match the apex origin {@code https://sacramentregistry.com},
+     * which causes OPTIONS preflight 403 for users on the bare domain.
+     */
+    static List<String> mergeDeployedSacramentRegistryExactOrigins(List<String> exactOrigins, Environment environment) {
+        if (!isDeployedProfile(environment)) {
+            return exactOrigins;
+        }
+        LinkedHashSet<String> merged = new LinkedHashSet<>(exactOrigins);
+        merged.add(normalizeOriginToken("https://sacramentregistry.com"));
+        merged.add(normalizeOriginToken("https://www.sacramentregistry.com"));
+        return new ArrayList<>(merged);
+    }
+
+    static List<String> mergeDeployedSacramentRegistryOriginPatterns(List<String> patterns, Environment environment) {
+        if (!isDeployedProfile(environment)) {
+            return patterns;
+        }
+        LinkedHashSet<String> merged = new LinkedHashSet<>(patterns);
+        merged.add("https://*.sacramentregistry.com");
+        return new ArrayList<>(merged);
     }
 
     /**

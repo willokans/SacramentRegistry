@@ -83,4 +83,32 @@ class CorsConfigTest {
         assertThat(CorsConfig.normalizeOriginToken("https://sacramentregistry.com"))
                 .isEqualTo("https://sacramentregistry.com");
     }
+
+    @Test
+    void mergeDeployedSacramentRegistryExactOrigins_prod_addsApexAndWwwWhenOnlyAppListed() {
+        Environment env = Mockito.mock(Environment.class);
+        Mockito.when(env.getActiveProfiles()).thenReturn(new String[] {"prod"});
+        assertThat(CorsConfig.mergeDeployedSacramentRegistryExactOrigins(
+                        List.of("https://app.sacramentregistry.com"), env))
+                .containsExactlyInAnyOrder(
+                        "https://app.sacramentregistry.com",
+                        "https://sacramentregistry.com",
+                        "https://www.sacramentregistry.com");
+    }
+
+    @Test
+    void mergeDeployedSacramentRegistryExactOrigins_local_unchanged() {
+        Environment env = Mockito.mock(Environment.class);
+        Mockito.when(env.getActiveProfiles()).thenReturn(new String[] {"default"});
+        List<String> only = List.of("http://localhost:3000");
+        assertThat(CorsConfig.mergeDeployedSacramentRegistryExactOrigins(only, env)).isEqualTo(only);
+    }
+
+    @Test
+    void mergeDeployedSacramentRegistryOriginPatterns_prod_addsSubdomainPattern() {
+        Environment env = Mockito.mock(Environment.class);
+        Mockito.when(env.getActiveProfiles()).thenReturn(new String[] {"staging"});
+        assertThat(CorsConfig.mergeDeployedSacramentRegistryOriginPatterns(List.of("https://*.other.com"), env))
+                .containsExactlyInAnyOrder("https://*.other.com", "https://*.sacramentregistry.com");
+    }
 }
