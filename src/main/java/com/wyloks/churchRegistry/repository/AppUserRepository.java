@@ -41,13 +41,13 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     @EntityGraph(attributePaths = {"parish", "parishAccesses"})
     Optional<AppUser> findByEmailIgnoreCase(String email);
 
-    @EntityGraph(attributePaths = {"parish", "parishAccesses"})
+    @EntityGraph(attributePaths = {"parish", "parishAccesses", "dioceseAccesses"})
     Optional<AppUser> findWithParishAccessesById(Long id);
 
-    @EntityGraph(attributePaths = {"parish", "parishAccesses"})
+    @EntityGraph(attributePaths = {"parish", "parishAccesses", "dioceseAccesses"})
     List<AppUser> findAllByOrderByUsernameAsc();
 
-    @EntityGraph(attributePaths = {"parish", "parishAccesses"})
+    @EntityGraph(attributePaths = {"parish", "parishAccesses", "dioceseAccesses"})
     @Query("""
             SELECT u FROM AppUser u
             WHERE (:q IS NULL OR TRIM(:q) = '' OR
@@ -59,7 +59,7 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
             """)
     Page<AppUser> searchByUserMetadata(@Param("q") String query, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"parish", "parishAccesses"})
+    @EntityGraph(attributePaths = {"parish", "parishAccesses", "dioceseAccesses"})
     @Query("""
             SELECT DISTINCT u FROM AppUser u
             LEFT JOIN u.parishAccesses pa
@@ -69,7 +69,7 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
             """)
     List<AppUser> findWithParishOverlapOrderByUsernameAsc(@Param("actorParishIds") Set<Long> actorParishIds);
 
-    @EntityGraph(attributePaths = {"parish", "parishAccesses"})
+    @EntityGraph(attributePaths = {"parish", "parishAccesses", "dioceseAccesses"})
     @Query("""
             SELECT DISTINCT u FROM AppUser u
             LEFT JOIN u.parishAccesses pa
@@ -87,6 +87,15 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
             @Param("q") String query,
             Pageable pageable
     );
+
+    @EntityGraph(attributePaths = {"parish", "parishAccesses", "dioceseAccesses"})
+    @Query("""
+            SELECT DISTINCT u FROM AppUser u
+            JOIN u.dioceseAccesses d
+            WHERE d.id = :dioceseId
+              AND UPPER(TRIM(u.role)) = 'DIOCESE_ADMIN'
+            """)
+    List<AppUser> findDioceseAdminsForDiocese(@Param("dioceseId") Long dioceseId);
 
     boolean existsByUsername(String username);
 

@@ -42,8 +42,12 @@ class CurrentUserAccessServiceTest {
         assertThat(access.role()).isEqualTo("SUPER_ADMIN");
         assertThat(access.parishIds()).containsExactlyInAnyOrder(1L);
         assertThat(access.isSuperAdmin()).isTrue();
+        assertThat(access.isDioceseAdmin()).isFalse();
+        assertThat(access.canAccessDioceseDashboard()).isTrue();
         assertThat(access.isAdmin()).isTrue();
         assertThat(service.isSuperAdmin()).isTrue();
+        assertThat(service.canAccessDioceseDashboard()).isTrue();
+        assertThat(service.isDioceseAdmin()).isFalse();
     }
 
     @Test
@@ -56,7 +60,26 @@ class CurrentUserAccessServiceTest {
         assertThat(access.parishIds()).containsExactlyInAnyOrder(10L, 20L);
         assertThat(access.isAdmin()).isTrue();
         assertThat(access.isSuperAdmin()).isFalse();
+        assertThat(access.isDioceseAdmin()).isFalse();
+        assertThat(access.canAccessDioceseDashboard()).isFalse();
         assertThat(service.isSuperAdmin()).isFalse();
+        assertThat(service.canAccessDioceseDashboard()).isFalse();
+    }
+
+    @Test
+    void currentUser_mapsDioceseAdmin_isAdminTrue_isSuperAdminFalse() {
+        setAuthentication("dioadm", "diocese_admin", Set.of(10L, 11L));
+
+        CurrentUserAccessService.CurrentUserAccess access = service.currentUser();
+
+        assertThat(access.role()).isEqualTo("DIOCESE_ADMIN");
+        assertThat(access.parishIds()).containsExactlyInAnyOrder(10L, 11L);
+        assertThat(access.isAdmin()).isTrue();
+        assertThat(access.isSuperAdmin()).isFalse();
+        assertThat(access.isDioceseAdmin()).isTrue();
+        assertThat(access.canAccessDioceseDashboard()).isTrue();
+        assertThat(service.isDioceseAdmin()).isTrue();
+        assertThat(service.canAccessDioceseDashboard()).isTrue();
     }
 
     @Test

@@ -58,19 +58,21 @@ public class SecurityConfig {
                         "/api/auth/invite-profile").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs", "/v3/api-docs/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/admin/users").hasRole("SUPER_ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/api/admin/users/invitations").hasAnyRole("ADMIN", "SUPER_ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/api/admin/users/invitations/*/resend").hasAnyRole("ADMIN", "SUPER_ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/api/admin/users/invitations/*/revoke").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/admin/users/invitations").hasAnyRole("ADMIN", "DIOCESE_ADMIN", "SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/admin/users/invitations/*/resend").hasAnyRole("ADMIN", "DIOCESE_ADMIN", "SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/admin/users/invitations/*/revoke").hasAnyRole("ADMIN", "DIOCESE_ADMIN", "SUPER_ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/dioceses").hasRole("SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/dioceses/*/dashboard")
+                        .hasAnyRole("SUPER_ADMIN", "DIOCESE_ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/parishes").hasRole("SUPER_ADMIN")
-                        .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                        .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "DIOCESE_ADMIN", "SUPER_ADMIN")
                         .requestMatchers(HttpMethod.POST,
                                 "/api/parishes/*/baptisms",
                                 "/api/communions",
                                 "/api/confirmations",
                                 "/api/marriages",
                                 "/api/marriages/with-parties")
-                        .hasAnyRole("ADMIN", "PRIEST", "PARISH_PRIEST", "PARISH_SECRETARY")
+                        .hasAnyRole("ADMIN", "DIOCESE_ADMIN", "PRIEST", "PARISH_PRIEST", "PARISH_SECRETARY")
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().denyAll())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)

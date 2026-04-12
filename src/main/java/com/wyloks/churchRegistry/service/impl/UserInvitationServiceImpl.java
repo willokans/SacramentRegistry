@@ -243,7 +243,8 @@ public class UserInvitationServiceImpl implements UserInvitationService {
     private CurrentUserAccessService.CurrentUserAccess requireAdmin() {
         CurrentUserAccessService.CurrentUserAccess currentUser = currentUserAccessService.currentUser();
         if (!currentUser.isAdmin()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin role required");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Administrator access required (parish admin, diocese admin, or super admin)");
         }
         return currentUser;
     }

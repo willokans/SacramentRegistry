@@ -51,19 +51,23 @@ function toDashboard(
   };
 }
 
-jest.mock('@/lib/api', () => ({
-  getStoredUser: jest.fn(),
-  getStoredToken: jest.fn(),
-  fetchDashboard: jest.fn(() =>
-    Promise.resolve({
-      counts: { baptisms: 0, communions: 0, confirmations: 0, marriages: 0, holyOrders: 0 },
-      baptisms: [],
-      communions: [],
-      confirmations: [],
-      marriages: [],
-    })
-  ),
-}));
+jest.mock('@/lib/api', () => {
+  const actual = jest.requireActual<typeof import('@/lib/api')>('@/lib/api');
+  return {
+    ...actual,
+    getStoredUser: jest.fn(),
+    getStoredToken: jest.fn(),
+    fetchDashboard: jest.fn(() =>
+      Promise.resolve({
+        counts: { baptisms: 0, communions: 0, confirmations: 0, marriages: 0, holyOrders: 0 },
+        baptisms: [],
+        communions: [],
+        confirmations: [],
+        marriages: [],
+      })
+    ),
+  };
+});
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
@@ -100,7 +104,7 @@ describe('Dashboard page', () => {
     });
   });
 
-  it('shows select-diocese message when admin has All dioceses selected', async () => {
+  it('shows parish welcome when super admin has All dioceses but a parish is selected', async () => {
     const { useParish } = require('@/context/ParishContext');
     useParish.mockReturnValue({
       parishId: 10,
@@ -130,12 +134,14 @@ describe('Dashboard page', () => {
     render(<TestWrapper><DashboardPage /></TestWrapper>);
 
     await waitFor(() => {
-      expect(screen.getByText('Select a diocese in the sidebar to view the diocesan dashboard.')).toBeInTheDocument();
+      expect(screen.getByText(/Welcome to St Mary Sacrament Registry/i)).toBeInTheDocument();
     });
-    expect(screen.queryByText(/Welcome to St Mary Sacrament Registry/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Select a diocese in the sidebar to view the diocesan dashboard/i),
+    ).not.toBeInTheDocument();
   });
 
-  it('shows select-diocese message when ADMIN (not super) has All dioceses selected', async () => {
+  it('shows parish dashboard when parish ADMIN has All dioceses selected (no diocese-dashboard gate)', async () => {
     const { useParish } = require('@/context/ParishContext');
     useParish.mockReturnValue({
       parishId: 10,
@@ -151,26 +157,70 @@ describe('Dashboard page', () => {
     const api = require('@/lib/api');
     api.getStoredUser.mockReturnValue({
       username: 'admin',
-      displayName: 'Diocese Admin',
+      displayName: 'Parish Admin',
       role: 'ADMIN',
     });
     api.getStoredToken.mockReturnValue('jwt-123');
+    api.fetchDashboard.mockResolvedValue(toDashboard(
+      { baptisms: 0, communions: 0, confirmations: 0, marriages: 0 },
+      [],
+      [],
+      [],
+      []
+    ));
     localStorage.setItem('church_registry_token', 'jwt-123');
     localStorage.setItem('church_registry_user', JSON.stringify({
       username: 'admin',
-      displayName: 'Diocese Admin',
+      displayName: 'Parish Admin',
       role: 'ADMIN',
     }));
 
     render(<TestWrapper><DashboardPage /></TestWrapper>);
 
     await waitFor(() => {
-      expect(screen.getByText('Select a diocese in the sidebar to view the diocesan dashboard.')).toBeInTheDocument();
+      expect(screen.getByText(/Welcome to St Mary Sacrament Registry/i)).toBeInTheDocument();
     });
-    expect(screen.queryByText(/Welcome to St Mary Sacrament Registry/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Select a diocese in the sidebar to view the diocesan dashboard.')).not.toBeInTheDocument();
   });
 
-  it('shows parish dashboard when non-admin has parish selected (diocese prompt only for admins)', async () => {
+  it('shows parish welcome when DIOCESE_ADMIN has All dioceses but a parish is selected', async () => {
+    const { useParish } = require('@/context/ParishContext');
+    useParish.mockReturnValue({
+      parishId: 10,
+      setParishId: jest.fn(),
+      dioceseId: null,
+      setDioceseId: jest.fn(),
+      parishes: [{ id: 10, parishName: 'St Mary', dioceseId: 1 }],
+      dioceses: [{ id: 1, dioceseName: 'Test Diocese', parishes: [] }],
+      loading: false,
+      error: null,
+      refetch: jest.fn(),
+    });
+    const api = require('@/lib/api');
+    api.getStoredUser.mockReturnValue({
+      username: 'dioadmin',
+      displayName: 'Diocese Admin',
+      role: 'DIOCESE_ADMIN',
+    });
+    api.getStoredToken.mockReturnValue('jwt-123');
+    localStorage.setItem('church_registry_token', 'jwt-123');
+    localStorage.setItem('church_registry_user', JSON.stringify({
+      username: 'dioadmin',
+      displayName: 'Diocese Admin',
+      role: 'DIOCESE_ADMIN',
+    }));
+
+    render(<TestWrapper><DashboardPage /></TestWrapper>);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Welcome to St Mary Sacrament Registry/i)).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByText(/Select a diocese in the sidebar to view the diocesan dashboard/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows parish dashboard when non–diocese-dashboard user has parish selected', async () => {
     const { useParish } = require('@/context/ParishContext');
     useParish.mockReturnValue({
       parishId: 10,

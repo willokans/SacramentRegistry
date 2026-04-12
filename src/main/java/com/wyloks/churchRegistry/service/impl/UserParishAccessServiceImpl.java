@@ -3,11 +3,13 @@ package com.wyloks.churchRegistry.service.impl;
 import com.wyloks.churchRegistry.dto.ReplaceUserParishAccessRequest;
 import com.wyloks.churchRegistry.dto.UserParishAccessResponse;
 import com.wyloks.churchRegistry.entity.AppUser;
+import com.wyloks.churchRegistry.entity.Diocese;
 import com.wyloks.churchRegistry.entity.Parish;
 import com.wyloks.churchRegistry.repository.AppUserRepository;
 import com.wyloks.churchRegistry.repository.ParishRepository;
 import com.wyloks.churchRegistry.security.CurrentUserAccessService;
 import com.wyloks.churchRegistry.security.ParishAccessPolicy;
+import com.wyloks.churchRegistry.service.DioceseAdminParishSyncService;
 import com.wyloks.churchRegistry.service.UserParishAccessService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -20,6 +22,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
@@ -32,6 +35,7 @@ public class UserParishAccessServiceImpl implements UserParishAccessService {
     private final AppUserRepository appUserRepository;
     private final ParishRepository parishRepository;
     private final CurrentUserAccessService currentUserAccessService;
+    private final DioceseAdminParishSyncService dioceseAdminParishSyncService;
 
     @Override
     @Transactional(readOnly = true)
@@ -86,6 +90,34 @@ public class UserParishAccessServiceImpl implements UserParishAccessService {
                 .orElseThrow(() -> notFound("User not found: " + userId));
         requireMutualParishVisibility(actor, user);
 
+        String targetRole = normalizeRole(user.getRole());
+        if ("DIOCESE_ADMIN".equals(targetRole)) {
+            if (!actor.isSuperAdmin()) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "Super Admin role required to modify diocese administrator assignments");
+            }
+            Set<Long> dioceseIds = normalizeDioceseIds(request);
+            if (dioceseIds.isEmpty()) {
+                throw new IllegalArgumentException("dioceseIds is required for DIOCESE_ADMIN users");
+            }
+            dioceseAdminParishSyncService.assignDiocesesAndSyncParishes(user, dioceseIds);
+
+            Long requestedDefaultParishId = request.getDefaultParishId();
+            Set<Long> derivedParishIds = user.getParishAccesses().stream()
+                    .map(Parish::getId)
+                    .collect(Collectors.toSet());
+            if (requestedDefaultParishId != null && !derivedParishIds.contains(requestedDefaultParishId)) {
+                throw new IllegalArgumentException("defaultParishId must be one of the parishes in assigned dioceses");
+            }
+            Map<Long, Parish> parishById = user.getParishAccesses().stream()
+                    .collect(Collectors.toMap(Parish::getId, Function.identity()));
+            Parish defaultParish = resolveDefaultParish(user, requestedDefaultParishId, derivedParishIds, parishById);
+            user.setParish(defaultParish);
+            return toResponse(appUserRepository.save(user));
+        }
+
+        dioceseAdminParishSyncService.clearDioceseAccess(user);
+
         Set<Long> requestedParishIds = normalizeParishIds(request);
         if (!actor.isSuperAdmin()) {
             if (!actor.parishIds().containsAll(requestedParishIds)) {
@@ -131,7 +163,7 @@ public class UserParishAccessServiceImpl implements UserParishAccessService {
     private CurrentUserAccessService.CurrentUserAccess requireAdmin() {
         CurrentUserAccessService.CurrentUserAccess currentUser = currentUserAccessService.currentUser();
         if (!currentUser.isAdmin()) {
-            throw forbidden("Admin or Super Admin role required");
+            throw forbidden("Administrator access required (parish admin, diocese admin, or super admin)");
         }
         return currentUser;
     }
@@ -147,6 +179,23 @@ public class UserParishAccessServiceImpl implements UserParishAccessService {
             throw new IllegalArgumentException("parishIds must contain only positive IDs");
         }
         return new HashSet<>(request.getParishIds());
+    }
+
+    private Set<Long> normalizeDioceseIds(ReplaceUserParishAccessRequest request) {
+        if (request.getDioceseIds() == null) {
+            return Collections.emptySet();
+        }
+        if (request.getDioceseIds().stream().anyMatch(id -> id == null || id <= 0)) {
+            throw new IllegalArgumentException("dioceseIds must contain only positive IDs");
+        }
+        return new HashSet<>(request.getDioceseIds());
+    }
+
+    private static String normalizeRole(String role) {
+        if (role == null || role.isBlank()) {
+            return null;
+        }
+        return role.trim().toUpperCase(Locale.ROOT);
     }
 
     private Parish resolveDefaultParish(
@@ -175,6 +224,9 @@ public class UserParishAccessServiceImpl implements UserParishAccessService {
         Set<Long> parishAccessIds = user.getParishAccesses().stream()
                 .map(Parish::getId)
                 .collect(Collectors.toSet());
+        Set<Long> dioceseAccessIds = user.getDioceseAccesses().stream()
+                .map(Diocese::getId)
+                .collect(Collectors.toSet());
 
         return UserParishAccessResponse.builder()
                 .userId(user.getId())
@@ -183,6 +235,7 @@ public class UserParishAccessServiceImpl implements UserParishAccessService {
                 .role(user.getRole())
                 .defaultParishId(user.getParish() != null ? user.getParish().getId() : null)
                 .parishAccessIds(parishAccessIds)
+                .dioceseAccessIds(dioceseAccessIds)
                 .build();
     }
 

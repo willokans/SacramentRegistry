@@ -9,6 +9,7 @@ import com.wyloks.churchRegistry.entity.Parish;
 import com.wyloks.churchRegistry.repository.DioceseRepository;
 import com.wyloks.churchRegistry.repository.ParishRepository;
 import com.wyloks.churchRegistry.security.CurrentUserAccessService;
+import com.wyloks.churchRegistry.service.DioceseAdminParishSyncService;
 import com.wyloks.churchRegistry.service.ParishService;
 import com.wyloks.churchRegistry.util.NameUtils;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class ParishServiceImpl implements ParishService {
     private final ParishRepository parishRepository;
     private final DioceseRepository dioceseRepository;
     private final CurrentUserAccessService currentUserAccessService;
+    private final DioceseAdminParishSyncService dioceseAdminParishSyncService;
 
     @Override
     @Transactional(readOnly = true)
@@ -74,6 +76,7 @@ public class ParishServiceImpl implements ParishService {
                 .requireMarriageConfirmation(true)
                 .build();
         entity = parishRepository.save(entity);
+        dioceseAdminParishSyncService.refreshParishAccessForDioceseAdmins(diocese.getId());
         return toResponse(entity);
     }
 

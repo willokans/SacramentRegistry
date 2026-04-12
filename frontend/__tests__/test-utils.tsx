@@ -11,6 +11,8 @@ export const defaultParishContext = {
   setParishId: jest.fn(),
   dioceseId: null as number | null,
   setDioceseId: jest.fn(),
+  sidebarCountryKey: null as string | null,
+  setSidebarCountryKey: jest.fn(),
   parishes: [{ id: 10, parishName: 'St Mary', dioceseId: 1 }],
   dioceses: [] as { id: number; dioceseName: string; parishes?: unknown[] }[],
   loading: false,

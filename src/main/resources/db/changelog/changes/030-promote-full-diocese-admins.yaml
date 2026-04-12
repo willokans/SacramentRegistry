@@ -1,0 +1,112 @@
+databaseChangeLog:
+  - changeSet:
+      id: 030-promote-full-diocese-admins
+      author: church-registry
+      preConditions:
+        - onFail: MARK_RAN
+        - onError: MARK_RAN
+        - tableExists:
+            tableName: app_user_diocese_access
+        - tableExists:
+            tableName: parish
+        - tableExists:
+            tableName: app_user
+      comment: |
+        Promotes legacy parish-scoped ADMIN users to DIOCESE_ADMIN when their parish access already covers
+        every parish in exactly one diocese (typical pre–DIOCESE_ADMIN “diocese-wide” setup). Inserts
+        app_user_diocese_access for that diocese, then updates role. Other ADMIN users stay parish-scoped;
+        operators promote the rest via User Setup or custom SQL. Portable SQL (H2 + PostgreSQL).
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO app_user_diocese_access (user_id, diocese_id)
+              WITH admin_parish_links AS (
+                SELECT u.id AS user_id, a.parish_id AS parish_id
+                FROM app_user u
+                JOIN app_user_parish_access a ON a.user_id = u.id
+                WHERE UPPER(TRIM(u.role)) = 'ADMIN'
+                UNION
+                SELECT u.id AS user_id, u.parish_id AS parish_id
+                FROM app_user u
+                WHERE UPPER(TRIM(u.role)) = 'ADMIN'
+                  AND u.parish_id IS NOT NULL
+              ),
+              admin_access AS (
+                SELECT apl.user_id,
+                       p.diocese_id,
+                       COUNT(DISTINCT p.id) AS accessed_parishes
+                FROM admin_parish_links apl
+                JOIN parish p ON p.id = apl.parish_id
+                GROUP BY apl.user_id, p.diocese_id
+              ),
+              single_diocese AS (
+                SELECT user_id
+                FROM admin_access
+                GROUP BY user_id
+                HAVING COUNT(DISTINCT diocese_id) = 1
+              ),
+              parish_counts AS (
+                SELECT diocese_id, COUNT(*) AS total_parishes
+                FROM parish
+                GROUP BY diocese_id
+              ),
+              full_diocese AS (
+                SELECT aa.user_id, aa.diocese_id
+                FROM admin_access aa
+                JOIN single_diocese sd ON sd.user_id = aa.user_id
+                JOIN parish_counts pc ON pc.diocese_id = aa.diocese_id
+                WHERE aa.accessed_parishes = pc.total_parishes
+                  AND pc.total_parishes > 0
+              )
+              SELECT fd.user_id, fd.diocese_id
+              FROM full_diocese fd
+              WHERE NOT EXISTS (
+                SELECT 1 FROM app_user_diocese_access x
+                WHERE x.user_id = fd.user_id AND x.diocese_id = fd.diocese_id
+              );
+        - sql:
+            sql: |
+              UPDATE app_user u
+              SET role = 'DIOCESE_ADMIN'
+              WHERE UPPER(TRIM(u.role)) = 'ADMIN'
+                AND u.id IN (
+                  WITH admin_parish_links AS (
+                    SELECT u2.id AS user_id, a.parish_id AS parish_id
+                    FROM app_user u2
+                    JOIN app_user_parish_access a ON a.user_id = u2.id
+                    WHERE UPPER(TRIM(u2.role)) = 'ADMIN'
+                    UNION
+                    SELECT u2.id AS user_id, u2.parish_id AS parish_id
+                    FROM app_user u2
+                    WHERE UPPER(TRIM(u2.role)) = 'ADMIN'
+                      AND u2.parish_id IS NOT NULL
+                  ),
+                  admin_access AS (
+                    SELECT apl.user_id,
+                           p.diocese_id,
+                           COUNT(DISTINCT p.id) AS accessed_parishes
+                    FROM admin_parish_links apl
+                    JOIN parish p ON p.id = apl.parish_id
+                    GROUP BY apl.user_id, p.diocese_id
+                  ),
+                  single_diocese AS (
+                    SELECT user_id
+                    FROM admin_access
+                    GROUP BY user_id
+                    HAVING COUNT(DISTINCT diocese_id) = 1
+                  ),
+                  parish_counts AS (
+                    SELECT diocese_id, COUNT(*) AS total_parishes
+                    FROM parish
+                    GROUP BY diocese_id
+                  ),
+                  full_diocese AS (
+                    SELECT aa.user_id, aa.diocese_id
+                    FROM admin_access aa
+                    JOIN single_diocese sd ON sd.user_id = aa.user_id
+                    JOIN parish_counts pc ON pc.diocese_id = aa.diocese_id
+                    WHERE aa.accessed_parishes = pc.total_parishes
+                      AND pc.total_parishes > 0
+                  )
+                  SELECT fd.user_id FROM full_diocese fd
+                );

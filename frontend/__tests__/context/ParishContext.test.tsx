@@ -11,20 +11,28 @@ jest.mock('next/navigation', () => ({
   usePathname: jest.fn(),
 }));
 
-jest.mock('@/lib/api', () => ({
-  fetchDiocesesWithParishes: jest.fn(),
-  getStoredToken: jest.fn(),
-  getStoredParishId: jest.fn(),
-  getStoredDioceseId: jest.fn(),
-  setStoredParishId: jest.fn(),
-  setStoredDioceseId: jest.fn(),
-  clearAuth: jest.fn(),
-}));
+jest.mock('@/lib/api', () => {
+  const actual = jest.requireActual<typeof import('@/lib/api')>('@/lib/api');
+  return {
+    ...actual,
+    fetchDiocesesWithParishes: jest.fn(),
+    getStoredToken: jest.fn(),
+    getStoredParishId: jest.fn(),
+    getStoredDioceseId: jest.fn(),
+    getStoredSidebarCountryKey: jest.fn(),
+    setStoredParishId: jest.fn(),
+    setStoredDioceseId: jest.fn(),
+    setStoredSidebarCountryKey: jest.fn(),
+    clearAuth: jest.fn(),
+  };
+});
 
 const mockDioceses = [
   {
     id: 1,
     dioceseName: 'Diocese A',
+    countryCode: 'GH',
+    countryName: 'Ghana',
     parishes: [
       { id: 10, parishName: 'St Mary', dioceseId: 1 },
       { id: 11, parishName: 'St John', dioceseId: 1 },
@@ -33,25 +41,48 @@ const mockDioceses = [
   {
     id: 2,
     dioceseName: 'Diocese B',
-    parishes: [
-      { id: 20, parishName: 'St Peter', dioceseId: 2 },
-    ],
+    countryCode: 'KE',
+    countryName: 'Kenya',
+    parishes: [{ id: 20, parishName: 'St Peter', dioceseId: 2 }],
+  },
+  {
+    id: 3,
+    dioceseName: 'Diocese Empty',
+    countryCode: 'US',
+    countryName: 'United States',
+    parishes: [],
   },
 ];
 
 function Consumer() {
-  const { parishId, setParishId, dioceseId, setDioceseId, parishes, dioceses, loading, error, refetch } = useParish();
+  const {
+    parishId,
+    setParishId,
+    dioceseId,
+    setDioceseId,
+    sidebarCountryKey,
+    setSidebarCountryKey,
+    parishes,
+    dioceses,
+    loading,
+    error,
+    refetch,
+  } = useParish();
   return (
     <div>
       <span data-testid="parish-id">{String(parishId)}</span>
       <span data-testid="diocese-id">{String(dioceseId)}</span>
+      <span data-testid="sidebar-country">{sidebarCountryKey === null ? 'null' : sidebarCountryKey}</span>
       <span data-testid="parishes-count">{parishes.length}</span>
       <span data-testid="dioceses-count">{dioceses.length}</span>
       <span data-testid="loading">{String(loading)}</span>
       <span data-testid="error">{error ?? ''}</span>
       <button type="button" onClick={() => setParishId(20)}>Set parish 20</button>
       <button type="button" onClick={() => setDioceseId(1)}>Set diocese 1</button>
+      <button type="button" onClick={() => setDioceseId(3)}>Set diocese 3</button>
       <button type="button" onClick={() => setDioceseId(null)}>Clear diocese</button>
+      <button type="button" onClick={() => setSidebarCountryKey('GH')}>Set country GH</button>
+      <button type="button" onClick={() => setSidebarCountryKey(null)}>Clear country</button>
       <button type="button" onClick={refetch}>Refetch</button>
     </div>
   );
@@ -64,6 +95,7 @@ describe('ParishContext', () => {
     (api.getStoredToken as jest.Mock).mockReturnValue('jwt-test');
     (api.getStoredParishId as jest.Mock).mockReturnValue(null);
     (api.getStoredDioceseId as jest.Mock).mockReturnValue(null);
+    (api.getStoredSidebarCountryKey as jest.Mock).mockReturnValue(null);
     (api.fetchDiocesesWithParishes as jest.Mock).mockResolvedValue(mockDioceses);
   });
 
@@ -82,7 +114,7 @@ describe('ParishContext', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('diocese-id')).toHaveTextContent('null');
-      expect(screen.getByTestId('dioceses-count')).toHaveTextContent('2');
+      expect(screen.getByTestId('dioceses-count')).toHaveTextContent('3');
     });
   });
 
@@ -142,6 +174,56 @@ describe('ParishContext', () => {
       expect(screen.getByTestId('diocese-id')).toHaveTextContent('null');
       expect(screen.getByTestId('parishes-count')).toHaveTextContent('3');
       expect(api.setStoredDioceseId).toHaveBeenCalledWith(null);
+    });
+  });
+
+  it('clears parishId when selected diocese has no parishes', async () => {
+    const user = userEvent.setup();
+    render(
+      <ParishProvider>
+        <Consumer />
+      </ParishProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('parish-id')).toHaveTextContent('10');
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Set diocese 3' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('diocese-id')).toHaveTextContent('3');
+      expect(screen.getByTestId('parishes-count')).toHaveTextContent('0');
+      expect(screen.getByTestId('parish-id')).toHaveTextContent('null');
+      expect(api.setStoredParishId).toHaveBeenCalledWith(null);
+    });
+  });
+
+  it('selects first parish when leaving an empty diocese and choosing one with parishes', async () => {
+    const user = userEvent.setup();
+    render(
+      <ParishProvider>
+        <Consumer />
+      </ParishProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('parish-id')).toHaveTextContent('10');
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Set diocese 3' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('parish-id')).toHaveTextContent('null');
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Set diocese 1' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('diocese-id')).toHaveTextContent('1');
+      expect(screen.getByTestId('parishes-count')).toHaveTextContent('2');
+      expect(screen.getByTestId('parish-id')).toHaveTextContent('10');
+      expect(api.setStoredParishId).toHaveBeenCalledWith(10);
     });
   });
 
@@ -232,6 +314,84 @@ describe('ParishContext', () => {
     await waitFor(() => {
       expect(api.clearAuth).toHaveBeenCalled();
       expect(screen.getByTestId('error')).toHaveTextContent('Session expired. Please sign in again.');
+    });
+  });
+
+  it('persists sidebar country from storage when compatible with diocese', async () => {
+    (api.getStoredSidebarCountryKey as jest.Mock).mockReturnValue('GH');
+    (api.getStoredDioceseId as jest.Mock).mockReturnValue(1);
+
+    render(
+      <ParishProvider>
+        <Consumer />
+      </ParishProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-country')).toHaveTextContent('GH');
+      expect(screen.getByTestId('diocese-id')).toHaveTextContent('1');
+      expect(screen.getByTestId('parishes-count')).toHaveTextContent('2');
+      expect(api.setStoredSidebarCountryKey).toHaveBeenCalledWith('GH');
+    });
+  });
+
+  it('clears incompatible stored country when it does not match stored diocese', async () => {
+    (api.getStoredSidebarCountryKey as jest.Mock).mockReturnValue('GH');
+    (api.getStoredDioceseId as jest.Mock).mockReturnValue(2);
+
+    render(
+      <ParishProvider>
+        <Consumer />
+      </ParishProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-country')).toHaveTextContent('null');
+      expect(screen.getByTestId('diocese-id')).toHaveTextContent('2');
+      expect(api.setStoredSidebarCountryKey).toHaveBeenCalledWith(null);
+    });
+  });
+
+  it('filters parishes to selected sidebar country when diocese is cleared', async () => {
+    const user = userEvent.setup();
+    render(
+      <ParishProvider>
+        <Consumer />
+      </ParishProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('parishes-count')).toHaveTextContent('3');
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Set country GH' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-country')).toHaveTextContent('GH');
+      expect(screen.getByTestId('parishes-count')).toHaveTextContent('2');
+      expect(api.setStoredSidebarCountryKey).toHaveBeenCalledWith('GH');
+    });
+  });
+
+  it('clears diocese when sidebar country excludes that diocese', async () => {
+    const user = userEvent.setup();
+    (api.getStoredDioceseId as jest.Mock).mockReturnValue(2);
+
+    render(
+      <ParishProvider>
+        <Consumer />
+      </ParishProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('diocese-id')).toHaveTextContent('2');
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Set country GH' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('diocese-id')).toHaveTextContent('null');
+      expect(api.setStoredDioceseId).toHaveBeenCalledWith(null);
     });
   });
 });

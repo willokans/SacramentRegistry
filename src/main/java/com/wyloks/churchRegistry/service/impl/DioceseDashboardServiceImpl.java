@@ -22,9 +22,11 @@ import com.wyloks.churchRegistry.service.FirstHolyCommunionService;
 import com.wyloks.churchRegistry.service.MarriageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -57,6 +59,10 @@ public class DioceseDashboardServiceImpl implements DioceseDashboardService {
     @Cacheable(cacheNames = CacheConfig.CACHE_DIOCESE_DASHBOARD, keyGenerator = "dioceseDashboardCacheKeyGenerator")
     public DioceseDashboardResponse getDioceseDashboard(Long dioceseId) {
         CurrentUserAccessService.CurrentUserAccess user = currentUserAccessService.currentUser();
+        if (!user.canAccessDioceseDashboard()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Diocese dashboard access denied. Only SUPER_ADMIN and DIOCESE_ADMIN may view the diocesan dashboard.");
+        }
         List<com.wyloks.churchRegistry.entity.Parish> parishesInScope = user.isSuperAdmin()
                 ? parishRepository.findByDioceseId(dioceseId)
                 : parishRepository.findByIdInAndDioceseId(user.parishIds(), dioceseId);

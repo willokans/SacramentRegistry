@@ -73,18 +73,21 @@ class SacramentAuthorizationServiceTest {
     }
 
     @Test
-    void requireDioceseAccess_admin_allowsAccess_whenAssignedParishInDiocese() {
+    void requireDioceseAccess_parishAdmin_denied_evenWhenParishInDiocese() {
         setCurrentUser("ADMIN", Set.of(10L));
-        when(parishRepository.findByIdInAndDioceseId(anySet(), eq(1L)))
-                .thenReturn(List.of(Parish.builder().id(10L).build()));
 
-        assertThatCode(() -> service.requireDioceseAccess(1L))
-                .doesNotThrowAnyException();
+        assertThatThrownBy(() -> service.requireDioceseAccess(1L))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> {
+                    ResponseStatusException rse = (ResponseStatusException) ex;
+                    assertThat(rse.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+                    assertThat(rse.getReason()).contains("SUPER_ADMIN and DIOCESE_ADMIN");
+                });
     }
 
     @Test
-    void requireDioceseAccess_admin_denied_whenNoParishInDiocese() {
-        setCurrentUser("ADMIN", Set.of(10L));
+    void requireDioceseAccess_dioceseAdmin_denied_whenNoParishInDiocese() {
+        setCurrentUser("DIOCESE_ADMIN", Set.of(10L));
         when(parishRepository.findByIdInAndDioceseId(anySet(), eq(1L)))
                 .thenReturn(Collections.emptyList());
 
@@ -95,6 +98,16 @@ class SacramentAuthorizationServiceTest {
                     assertThat(rse.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
                     assertThat(rse.getReason()).contains("No assigned parish in this diocese");
                 });
+    }
+
+    @Test
+    void requireDioceseAccess_dioceseAdmin_allowsAccess_whenSyncedParishInDiocese() {
+        setCurrentUser("DIOCESE_ADMIN", Set.of(10L));
+        when(parishRepository.findByIdInAndDioceseId(anySet(), eq(1L)))
+                .thenReturn(List.of(Parish.builder().id(10L).build()));
+
+        assertThatCode(() -> service.requireDioceseAccess(1L))
+                .doesNotThrowAnyException();
     }
 
     @Test
@@ -172,7 +185,7 @@ class SacramentAuthorizationServiceTest {
 
     @Test
     void requireDioceseAccess_nullDioceseId_throwsForbidden() {
-        setCurrentUser("ADMIN", Set.of(1L));
+        setCurrentUser("DIOCESE_ADMIN", Set.of(1L));
 
         assertThatThrownBy(() -> service.requireDioceseAccess(null))
                 .isInstanceOf(ResponseStatusException.class)

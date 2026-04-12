@@ -46,6 +46,11 @@ public class CreateUserRequest {
     private Set<@NotNull(message = "parishIds must not contain null values")
             @Positive(message = "parishIds must contain only positive IDs") Long> parishIds = new HashSet<>();
 
+    /** Required when {@code role} is {@code DIOCESE_ADMIN}; parish access is derived from these dioceses. */
+    @Builder.Default
+    private Set<@NotNull(message = "dioceseIds must not contain null values")
+            @Positive(message = "dioceseIds must contain only positive IDs") Long> dioceseIds = new HashSet<>();
+
     @NotBlank(message = "defaultPassword is required")
     @Size(min = 8, message = "defaultPassword must be at least 8 characters")
     private String defaultPassword;

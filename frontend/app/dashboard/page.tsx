@@ -5,11 +5,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { getStoredToken, getStoredUser } from '@/lib/api';
+import { canSeeDioceseDashboard } from '@/lib/appRoles';
 import AuthenticatedLayout from '@/components/AuthenticatedLayout';
 import DashboardSkeleton from '@/components/DashboardSkeleton';
 import { useParish } from '@/context/ParishContext';
 import { getChurchBranding } from '@/lib/church-branding';
 import { fetchDashboard, type BaptismResponse, type FirstHolyCommunionResponse, type ConfirmationResponse, type MarriageResponse } from '@/lib/api';
+import { sameNumericId } from '@/lib/sameNumericId';
 
 const DASHBOARD_SWR_OPTIONS = {
   revalidateOnFocus: false,
@@ -197,8 +199,10 @@ export default function DashboardPage() {
   const router = useRouter();
   const user = getStoredUser();
   const { parishId, dioceseId, parishes } = useParish();
+  const effectiveParishId =
+    parishId != null && parishes.some((p) => sameNumericId(p.id, parishId)) ? parishId : null;
 
-  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
+  const dioceseDashboardViewer = canSeeDioceseDashboard(user?.role);
 
   useEffect(() => {
     const token = getStoredToken();
@@ -207,9 +211,12 @@ export default function DashboardPage() {
     }
   }, [router, user]);
 
-  const { counts, recent, monthly, monthNames, maxBar, loading, error } = useDashboardData(parishId ?? null);
+  const { counts, recent, monthly, monthNames, maxBar, loading, error } = useDashboardData(effectiveParishId);
 
-  const parish = parishId ? parishes.find((p) => p.id === parishId) : undefined;
+  const parish =
+    effectiveParishId != null
+      ? parishes.find((p) => sameNumericId(p.id, effectiveParishId))
+      : undefined;
   const parishName = parish?.parishName ?? null;
   const churchBranding = getChurchBranding(parishName);
   const welcomeTitle = churchBranding?.appTitle ?? (parishName ? `${parishName} Sacrament Registry` : null);
@@ -226,10 +233,10 @@ export default function DashboardPage() {
               {greeting}, {displayName}
             </h1>
             <p className="mt-1 text-gray-600">
-              {isAdmin && dioceseId == null
-                ? 'Select a diocese in the sidebar to view the diocesan dashboard'
-                : welcomeTitle
-                  ? `Welcome to ${welcomeTitle}`
+              {welcomeTitle
+                ? `Welcome to ${welcomeTitle}`
+                : dioceseDashboardViewer && dioceseId == null
+                  ? 'Select a diocese in the sidebar to view the diocesan dashboard'
                   : 'Select a parish in the sidebar'}
             </p>
           </div>
@@ -238,25 +245,25 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {error && (!isAdmin || dioceseId != null) && (
+        {error && (
           <p className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700" role="alert">
             {error}
           </p>
         )}
 
-        {parishId && loading && (!isAdmin || dioceseId != null) && <DashboardSkeleton />}
+        {effectiveParishId && loading && <DashboardSkeleton />}
 
-        {isAdmin && dioceseId == null && !loading && (
+        {dioceseDashboardViewer && dioceseId == null && effectiveParishId == null && !loading && (
           <p className="text-gray-600">Select a diocese in the sidebar to view the diocesan dashboard.</p>
         )}
 
-        {parishId && !loading && (!isAdmin || dioceseId != null) && (
+        {effectiveParishId && !loading && (
           <>
             {/* Summary cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {SACRAMENT_CARD_CONFIG.map(({ icon, title, countKey, path, ctaLabel, guidance, buttonClass }) => {
                 const count = counts[countKey];
-                const href = `${path}?parishId=${parishId}`;
+                const href = `${path}?parishId=${effectiveParishId}`;
                 const isPrimaryKpi = countKey === 'baptisms';
                 return (
                   <div
@@ -297,28 +304,28 @@ export default function DashboardPage() {
               <h2 className="text-lg font-semibold text-gray-800 mb-2">Quick Actions</h2>
               <div className="flex flex-wrap gap-2">
                 <Link
-                  href={`/baptisms/new?parishId=${parishId}`}
+                  href={`/baptisms/new?parishId=${effectiveParishId}`}
                   className="inline-flex items-center gap-2 rounded-lg bg-sancta-maroon px-4 py-3 text-white font-medium shadow-sm hover:bg-sancta-maroon-dark min-h-[44px]"
                 >
                   <span aria-hidden>💧</span>
                   Register Baptism
                 </Link>
                 <Link
-                  href={`/communions/new?parishId=${parishId}`}
+                  href={`/communions/new?parishId=${effectiveParishId}`}
                   className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 hover:border-gray-400 hover:bg-gray-50 min-h-[44px]"
                 >
                   <span aria-hidden>🍞</span>
                   Register Holy Communion
                 </Link>
                 <Link
-                  href={`/confirmations/new?parishId=${parishId}`}
+                  href={`/confirmations/new?parishId=${effectiveParishId}`}
                   className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 hover:border-gray-400 hover:bg-gray-50 min-h-[44px]"
                 >
                   <span aria-hidden>✝</span>
                   Register Confirmation
                 </Link>
                 <Link
-                  href={`/marriages/new?parishId=${parishId}`}
+                  href={`/marriages/new?parishId=${effectiveParishId}`}
                   className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 hover:border-gray-400 hover:bg-gray-50 min-h-[44px]"
                 >
                   <span aria-hidden>💍</span>
@@ -438,7 +445,7 @@ export default function DashboardPage() {
           </>
         )}
 
-        {!parishId && parishes.length === 0 && !loading && (
+        {!effectiveParishId && parishes.length === 0 && !loading && (
           <p className="text-gray-600">Add a diocese and parish to see the dashboard (admin only).</p>
         )}
       </div>

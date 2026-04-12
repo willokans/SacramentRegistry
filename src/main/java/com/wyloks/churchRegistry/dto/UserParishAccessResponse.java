@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.HashSet;
 import java.util.Set;
 
 @Data
@@ -19,4 +20,7 @@ public class UserParishAccessResponse {
     private String role;
     private Long defaultParishId;
     private Set<Long> parishAccessIds;
+
+    @Builder.Default
+    private Set<Long> dioceseAccessIds = new HashSet<>();
 }

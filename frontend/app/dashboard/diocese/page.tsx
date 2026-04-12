@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { getStoredToken, getStoredUser, fetchDioceseDashboard } from '@/lib/api';
+import { canSeeDioceseDashboard } from '@/lib/appRoles';
 import type { DioceseParishActivityItem } from '@/lib/api';
 import AuthenticatedLayout from '@/components/AuthenticatedLayout';
 import DashboardSkeleton from '@/components/DashboardSkeleton';
@@ -60,11 +61,11 @@ export default function DioceseDashboardPage() {
   const user = getStoredUser();
   const { dioceseId, dioceses } = useParish();
 
-  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
+  const mayUseDioceseDashboard = canSeeDioceseDashboard(user?.role);
 
   const { data, error: swrError, isLoading } = useSWR(
-    dioceseId && isAdmin ? ['diocese-dashboard', dioceseId] : null,
-    dioceseId && isAdmin ? () => fetchDioceseDashboard(dioceseId) : null,
+    dioceseId && mayUseDioceseDashboard ? ['diocese-dashboard', dioceseId] : null,
+    dioceseId && mayUseDioceseDashboard ? () => fetchDioceseDashboard(dioceseId) : null,
     DASHBOARD_SWR_OPTIONS
   );
 
@@ -163,12 +164,12 @@ export default function DioceseDashboardPage() {
     const token = getStoredToken();
     if (!token || !user) {
       router.replace('/login');
-    } else if (!isAdmin) {
+    } else if (!mayUseDioceseDashboard) {
       router.replace('/dashboard');
     }
-  }, [router, user, isAdmin]);
+  }, [router, user, mayUseDioceseDashboard]);
 
-  if (user && !isAdmin) {
+  if (user && !mayUseDioceseDashboard) {
     return (
       <AuthenticatedLayout>
         <p className="text-gray-600">Redirecting…</p>

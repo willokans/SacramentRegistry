@@ -29,7 +29,8 @@ public class SacramentAuthorizationService {
     private static final String NO_PARISH_READ = "Sacrament has no parish assignment; access denied";
     private static final String NO_PARISH_WRITE = "Sacrament has no parish assignment; write denied";
 
-    private static final Set<String> WRITE_ROLES = Set.of("ADMIN", "PRIEST", "PARISH_PRIEST", "PARISH_SECRETARY");
+    private static final Set<String> WRITE_ROLES = Set.of(
+            "ADMIN", "DIOCESE_ADMIN", "PRIEST", "PARISH_PRIEST", "PARISH_SECRETARY");
 
     private final BaptismRepository baptismRepository;
     private final FirstHolyCommunionRepository communionRepository;
@@ -52,15 +53,14 @@ public class SacramentAuthorizationService {
     }
 
     /**
-     * Ensures the current user can access diocese-level entry points (e.g. diocesan dashboard, directory).
-     * Product policy (Option B): {@code SUPER_ADMIN} may access any diocese; {@code ADMIN} only if assigned to at least
-     * one parish in that diocese. Aggregates and lists for {@code ADMIN} are then limited to assigned parishes in that
-     * diocese (never the whole diocese).
+     * Ensures the current user may call the diocesan dashboard for the given diocese.
+     * {@code SUPER_ADMIN} may access any diocese; {@code DIOCESE_ADMIN} only if they have at least one assigned parish
+     * in that diocese (expanded parish access from diocese assignment). Parish-scoped {@code ADMIN} is denied.
      */
     public void requireDioceseAccess(Long dioceseId) {
         CurrentUser user = currentUser();
-        if (!user.isParishAdminOrSuper()) {
-            throw forbidden("Diocese access denied. Only ADMIN and SUPER_ADMIN can access the diocesan dashboard.");
+        if (!user.canAccessDioceseDashboard()) {
+            throw forbidden("Diocese access denied. Only SUPER_ADMIN and DIOCESE_ADMIN may access the diocesan dashboard.");
         }
         if (dioceseId == null) {
             throw forbidden("Diocese ID is required");
@@ -77,13 +77,13 @@ public class SacramentAuthorizationService {
     }
 
     /**
-     * Parish policy settings (e.g. marriage sacrament requirements): {@code ADMIN} or {@code SUPER_ADMIN},
-     * with parish scope enforced separately (e.g. {@link #requireParishAccess(Long)}).
+     * Parish policy settings (e.g. marriage sacrament requirements): {@code ADMIN}, {@code DIOCESE_ADMIN}, or
+     * {@code SUPER_ADMIN}, with parish scope enforced separately (e.g. {@link #requireParishAccess(Long)}).
      */
     public void requireAdminRole() {
         CurrentUser user = currentUser();
         if (!user.isParishAdminOrSuper()) {
-            throw forbidden("Only ADMIN and SUPER_ADMIN may perform this action");
+            throw forbidden("Only ADMIN, DIOCESE_ADMIN, and SUPER_ADMIN may perform this action");
         }
     }
 
@@ -364,8 +364,12 @@ public class SacramentAuthorizationService {
             return "SUPER_ADMIN".equals(role);
         }
 
+        boolean canAccessDioceseDashboard() {
+            return isSuperAdmin() || "DIOCESE_ADMIN".equals(role);
+        }
+
         boolean isParishAdminOrSuper() {
-            return "ADMIN".equals(role) || "SUPER_ADMIN".equals(role);
+            return "ADMIN".equals(role) || "DIOCESE_ADMIN".equals(role) || "SUPER_ADMIN".equals(role);
         }
     }
 }

@@ -148,6 +148,21 @@ export async function login(username: string, password: string): Promise<LoginAp
 const TOKEN_STORAGE_KEY = 'church_registry_token';
 const REFRESH_TOKEN_STORAGE_KEY = 'church_registry_refresh_token';
 const USER_STORAGE_KEY = 'church_registry_user';
+
+/** Fired after login or token refresh updates storage; ParishProvider refetches directory data. */
+export const AUTH_SIGNED_IN_EVENT = 'church-registry-auth-signed-in';
+/** Fired after logout clears storage; ParishProvider clears diocese/parish state. */
+export const AUTH_SIGNED_OUT_EVENT = 'church-registry-auth-signed-out';
+
+function dispatchAuthSignedIn(): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event(AUTH_SIGNED_IN_EVENT));
+}
+
+function dispatchAuthSignedOut(): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event(AUTH_SIGNED_OUT_EVENT));
+}
 /** Updated on user interaction and on explicit login — not on silent JWT refresh. */
 const AUTH_LAST_ACTIVITY_KEY = 'church_registry_last_activity_ms';
 let refreshInFlight: Promise<boolean> | null = null;
@@ -156,10 +171,14 @@ function persistAuthCredentials(
   token: string,
   refreshToken: string,
   user: { username: string; displayName: string | null; role: string | null },
+  emitSignedIn = false,
 ) {
   localStorage.setItem(TOKEN_STORAGE_KEY, token);
   localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refreshToken);
   localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+  if (emitSignedIn) {
+    dispatchAuthSignedIn();
+  }
 }
 
 /** Call when the user does something in the app (also called from login via storeAuth). */
@@ -197,7 +216,7 @@ export function getStoredUser(): { username: string; displayName: string | null;
 }
 
 export function storeAuth(token: string, refreshToken: string, user: { username: string; displayName: string | null; role: string | null }) {
-  persistAuthCredentials(token, refreshToken, user);
+  persistAuthCredentials(token, refreshToken, user, true);
   touchAuthActivity();
 }
 
@@ -206,7 +225,9 @@ export function clearAuth() {
   localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
   localStorage.removeItem(USER_STORAGE_KEY);
   localStorage.removeItem(AUTH_LAST_ACTIVITY_KEY);
+  localStorage.removeItem(SIDEBAR_COUNTRY_STORAGE_KEY);
   clearRememberDevicePreference();
+  dispatchAuthSignedOut();
 }
 
 /** Default copy when the API returns 200 without a usable `message` field (matches server ForgotPasswordResponse.MESSAGE). */
@@ -336,6 +357,7 @@ export async function resetPassword(newPassword: string): Promise<void> {
 
 const PARISH_STORAGE_KEY = 'church_registry_parish_id';
 const DIOCESE_STORAGE_KEY = 'church_registry_diocese_id';
+const SIDEBAR_COUNTRY_STORAGE_KEY = 'church_registry_sidebar_country';
 
 export function getStoredParishId(): number | null {
   if (typeof window === 'undefined') return null;
@@ -363,6 +385,20 @@ export function setStoredDioceseId(dioceseId: number | null): void {
   if (typeof window === 'undefined') return;
   if (dioceseId == null) localStorage.removeItem(DIOCESE_STORAGE_KEY);
   else localStorage.setItem(DIOCESE_STORAGE_KEY, String(dioceseId));
+}
+
+/** Sidebar country filter: `null` means "All countries" (stored key removed). */
+export function getStoredSidebarCountryKey(): string | null {
+  if (typeof window === 'undefined') return null;
+  const raw = localStorage.getItem(SIDEBAR_COUNTRY_STORAGE_KEY);
+  if (raw == null || raw === '') return null;
+  return raw;
+}
+
+export function setStoredSidebarCountryKey(key: string | null): void {
+  if (typeof window === 'undefined') return;
+  if (key == null || key === '') localStorage.removeItem(SIDEBAR_COUNTRY_STORAGE_KEY);
+  else localStorage.setItem(SIDEBAR_COUNTRY_STORAGE_KEY, key);
 }
 
 function getAuthHeaders(): HeadersInit {
@@ -543,6 +579,8 @@ export interface BaptismRequest {
   liberNo?: string;
 }
 
+export { sameNumericId } from './sameNumericId';
+
 export interface ParishResponse {
   id: number;
   parishName: string;
@@ -652,14 +690,71 @@ export interface DioceseWithParishesResponse {
   dioceseName: string;
   code?: string;
   description?: string;
+  countryCode?: string;
+  countryName?: string;
   parishes: ParishResponse[];
+}
+
+/**
+ * Normalizes `/api/dioceses/with-parishes` JSON so the UI always has numeric ids and each parish has a
+ * {@link ParishResponse.dioceseId}. Some payloads omit {@code dioceseId} on nested parishes; we fall back to the parent diocese id.
+ */
+export function normalizeDiocesesWithParishesPayload(raw: unknown): DioceseWithParishesResponse[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item: any): DioceseWithParishesResponse[] => {
+    const dioceseIdNum = Number(item?.id);
+    if (!Number.isFinite(dioceseIdNum) || dioceseIdNum <= 0) return [];
+
+    const parishesRaw = Array.isArray(item?.parishes) ? item.parishes : [];
+    const parishes: ParishResponse[] = parishesRaw
+      .map((p: any) => {
+        const pid = Number(p?.id);
+        if (!Number.isFinite(pid) || pid <= 0) return null;
+        const fromPayload = Number(p?.dioceseId ?? p?.diocese_id);
+        const resolvedDioceseId =
+          Number.isFinite(fromPayload) && fromPayload > 0 ? fromPayload : dioceseIdNum;
+        const name = String(p?.parishName ?? p?.parish_name ?? '').trim();
+        return {
+          id: pid,
+          parishName: name || `Parish ${pid}`,
+          dioceseId: resolvedDioceseId,
+          description: typeof p?.description === 'string' ? p.description : undefined,
+          requireMarriageConfirmation:
+            p?.requireMarriageConfirmation ?? p?.require_marriage_confirmation ?? true,
+        } satisfies ParishResponse;
+      })
+      .filter((p: ParishResponse | null): p is ParishResponse => p != null);
+
+    const dioceseName = String(item?.dioceseName ?? item?.diocese_name ?? '').trim();
+    const row: DioceseWithParishesResponse = {
+      id: dioceseIdNum,
+      dioceseName: dioceseName || `Diocese ${dioceseIdNum}`,
+      code: typeof item?.code === 'string' ? item.code : undefined,
+      description: typeof item?.description === 'string' ? item.description : undefined,
+      countryCode:
+        typeof item?.countryCode === 'string'
+          ? item.countryCode
+          : typeof item?.country_code === 'string'
+            ? item.country_code
+            : undefined,
+      countryName:
+        typeof item?.countryName === 'string'
+          ? item.countryName
+          : typeof item?.country_name === 'string'
+            ? item.country_name
+            : undefined,
+      parishes,
+    };
+    return [row];
+  });
 }
 
 /** Fetches all dioceses with their parishes in one request. Use for ParishContext to avoid N+1 round-trips. */
 export async function fetchDiocesesWithParishes(): Promise<DioceseWithParishesResponse[]> {
   const res = await fetchWithRetry(`${getBaseUrl()}/api/dioceses/with-parishes`, { headers: getAuthHeaders() });
   if (!res.ok) throw new Error(res.status === 401 ? 'Unauthorized' : 'Failed to fetch dioceses');
-  return res.json();
+  const raw = await res.json();
+  return normalizeDiocesesWithParishesPayload(raw);
 }
 
 export async function fetchParishes(dioceseId: number): Promise<ParishResponse[]> {

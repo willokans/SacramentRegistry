@@ -227,3 +227,7 @@ databaseChangeLog:
       file: db/changelog/changes/027-rls-app-is-admin-super-admin-only-doc.yaml
   - include:
       file: db/changelog/changes/028-admin-user-parish-access-backfill.yaml
+  - include:
+      file: db/changelog/changes/029-app-user-diocese-access.yaml
+  - include:
+      file: db/changelog/changes/030-promote-full-diocese-admins.yaml
