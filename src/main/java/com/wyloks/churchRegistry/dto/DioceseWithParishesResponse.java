@@ -17,5 +17,7 @@ public class DioceseWithParishesResponse {
     private String dioceseName;
     private String code;
     private String description;
+    private String countryCode;
+    private String countryName;
     private List<ParishResponse> parishes;
 }

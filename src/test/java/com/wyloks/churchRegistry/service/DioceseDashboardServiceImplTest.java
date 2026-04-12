@@ -25,7 +25,11 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -314,14 +318,28 @@ class DioceseDashboardServiceImplTest {
     }
 
     @Test
-    void getDioceseDashboard_parishScopedAdmin_aggregatesOnlyAssignedParishesInDiocese() {
+    void getDioceseDashboard_parishAdmin_throwsForbidden() {
+        when(currentUserAccessService.currentUser())
+                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("admin", "ADMIN", Set.of(10L)));
+
+        assertThatThrownBy(() -> dioceseDashboardService.getDioceseDashboard(1L))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> {
+                    ResponseStatusException rse = (ResponseStatusException) ex;
+                    assertThat(rse.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+                    assertThat(rse.getReason()).contains("SUPER_ADMIN and DIOCESE_ADMIN");
+                });
+    }
+
+    @Test
+    void getDioceseDashboard_dioceseAdmin_aggregatesOnlyAssignedParishesInDiocese() {
         Long dioceseId = 1L;
         parish1.setId(10L);
         parish2.setId(20L);
         diocese.setId(dioceseId);
 
         when(currentUserAccessService.currentUser())
-                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("admin", "ADMIN", Set.of(10L)));
+                .thenReturn(new CurrentUserAccessService.CurrentUserAccess("da", "DIOCESE_ADMIN", Set.of(10L)));
 
         when(parishRepository.findByIdInAndDioceseId(Set.of(10L), dioceseId))
                 .thenReturn(List.of(parish1));

@@ -21,6 +21,14 @@ public class ReplaceUserParishAccessRequest {
     private Set<@NotNull(message = "parishIds must not contain null values")
             @Positive(message = "parishIds must contain only positive IDs") Long> parishIds = new HashSet<>();
 
+    /**
+     * For {@code DIOCESE_ADMIN} users, super-admins must send non-empty diocese ids; parish access is re-derived.
+     * {@link #parishIds} is ignored for that role.
+     */
+    @Builder.Default
+    private Set<@NotNull(message = "dioceseIds must not contain null values")
+            @Positive(message = "dioceseIds must contain only positive IDs") Long> dioceseIds = new HashSet<>();
+
     @Positive(message = "defaultParishId must be a positive ID")
     private Long defaultParishId;
 }

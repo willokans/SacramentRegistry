@@ -10,9 +10,11 @@ import {
   fetchDioceseDashboard,
   getStoredDioceseId,
   login,
+  normalizeDiocesesWithParishesPayload,
   setStoredDioceseId,
   type DioceseDashboardResponse,
 } from '@/lib/api';
+import { sameNumericId } from '@/lib/sameNumericId';
 
 const mockDioceseDashboard: DioceseDashboardResponse = {
   counts: {
@@ -481,6 +483,38 @@ describe('diocese API backward compatibility', () => {
   });
 });
 
+describe('normalizeDiocesesWithParishesPayload', () => {
+  it('fills dioceseId on nested parishes when omitted (nested payload)', () => {
+    const out = normalizeDiocesesWithParishesPayload([
+      {
+        id: 5,
+        dioceseName: 'Abuja',
+        countryCode: 'NG',
+        parishes: [{ id: 10, parishName: 'St Test' }],
+      },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].parishes).toHaveLength(1);
+    expect(out[0].parishes[0].dioceseId).toBe(5);
+    expect(out[0].parishes[0].id).toBe(10);
+  });
+
+  it('accepts snake_case diocese and parish fields', () => {
+    const out = normalizeDiocesesWithParishesPayload([
+      {
+        id: 5,
+        diocese_name: 'Abuja',
+        country_code: 'NG',
+        parishes: [{ id: 10, parish_name: 'St Test', diocese_id: 5 }],
+      },
+    ]);
+    expect(out[0].dioceseName).toBe('Abuja');
+    expect(out[0].countryCode).toBe('NG');
+    expect(out[0].parishes[0].parishName).toBe('St Test');
+    expect(out[0].parishes[0].dioceseId).toBe(5);
+  });
+});
+
 describe('login', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -592,5 +626,20 @@ describe('login', () => {
     });
 
     await expect(login('a', 'b')).rejects.toThrow(/couldn't complete sign-in from this browser/i);
+  });
+});
+
+describe('sameNumericId', () => {
+  it('matches number and string forms of the same id', () => {
+    expect(sameNumericId(42, 42)).toBe(true);
+    expect(sameNumericId('42', 42)).toBe(true);
+    expect(sameNumericId(42, '42')).toBe(true);
+  });
+
+  it('returns false for null, NaN, or different ids', () => {
+    expect(sameNumericId(null, 1)).toBe(false);
+    expect(sameNumericId(1, null)).toBe(false);
+    expect(sameNumericId(1, 2)).toBe(false);
+    expect(sameNumericId(Number.NaN, 1)).toBe(false);
   });
 });

@@ -45,6 +45,16 @@ class AppUserDetailsTest {
     }
 
     @Test
+    void isSuperAdmin_false_forDioceseAdmin() {
+        AppUser user = AppUser.builder()
+                .username("u")
+                .passwordHash("h")
+                .role("DIOCESE_ADMIN")
+                .build();
+        assertThat(new AppUserDetails(user).isSuperAdmin()).isFalse();
+    }
+
+    @Test
     void isSuperAdmin_false_forNonAdminRoles() {
         for (String role : new String[] {"PARISH_PRIEST", "PRIEST", "PARISH_VIEWER", null, "", "  "}) {
             AppUser user = AppUser.builder()

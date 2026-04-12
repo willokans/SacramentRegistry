@@ -3,11 +3,13 @@ package com.wyloks.churchRegistry.service.impl;
 import com.wyloks.churchRegistry.dto.CreateUserRequest;
 import com.wyloks.churchRegistry.dto.UserParishAccessResponse;
 import com.wyloks.churchRegistry.entity.AppUser;
+import com.wyloks.churchRegistry.entity.Diocese;
 import com.wyloks.churchRegistry.entity.Parish;
 import com.wyloks.churchRegistry.repository.AppUserRepository;
 import com.wyloks.churchRegistry.repository.ParishRepository;
 import com.wyloks.churchRegistry.security.AppUserDetails;
 import com.wyloks.churchRegistry.service.AdminUserService;
+import com.wyloks.churchRegistry.service.DioceseAdminParishSyncService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -31,12 +33,13 @@ import java.util.stream.Collectors;
 public class AdminUserServiceImpl implements AdminUserService {
 
     private static final Set<String> ALLOWED_ROLES = Set.of(
-            "SUPER_ADMIN", "ADMIN", "PRIEST", "PARISH_PRIEST", "PARISH_SECRETARY", "PARISH_VIEWER"
+            "SUPER_ADMIN", "ADMIN", "DIOCESE_ADMIN", "PRIEST", "PARISH_PRIEST", "PARISH_SECRETARY", "PARISH_VIEWER"
     );
 
     private final AppUserRepository appUserRepository;
     private final ParishRepository parishRepository;
     private final PasswordEncoder passwordEncoder;
+    private final DioceseAdminParishSyncService dioceseAdminParishSyncService;
 
     @Override
     @Transactional
@@ -67,6 +70,15 @@ public class AdminUserServiceImpl implements AdminUserService {
         if (appUserRepository.existsByFirstNameIgnoreCaseAndLastNameIgnoreCase(firstName, lastName)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "A user with this name (first name and last name) already exists. Please use a different name or add a distinguishing detail (e.g. middle initial).");
+        }
+
+        if (!"DIOCESE_ADMIN".equals(role) && !normalizeDioceseIds(request.getDioceseIds()).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "dioceseIds may only be set when role is DIOCESE_ADMIN");
+        }
+
+        if ("DIOCESE_ADMIN".equals(role)) {
+            return createDioceseAdmin(request, role, email, firstName, lastName);
         }
 
         Set<Long> parishIds = normalizeParishIds(request.getParishIds());
@@ -120,6 +132,66 @@ public class AdminUserServiceImpl implements AdminUserService {
         return toResponse(saved);
     }
 
+    private UserParishAccessResponse createDioceseAdmin(
+            CreateUserRequest request,
+            String role,
+            String email,
+            String firstName,
+            String lastName
+    ) {
+        if (!normalizeParishIds(request.getParishIds()).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "parishIds must be empty for DIOCESE_ADMIN; access is derived from dioceseIds");
+        }
+        Set<Long> dioceseIds = normalizeDioceseIds(request.getDioceseIds());
+        if (dioceseIds.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "dioceseIds is required for DIOCESE_ADMIN");
+        }
+
+        String displayName = buildDisplayName(
+                request.getTitle(),
+                request.getFirstName(),
+                request.getLastName(),
+                request.getUsername()
+        );
+
+        String passwordHash = passwordEncoder.encode(request.getDefaultPassword());
+
+        AppUser user = AppUser.builder()
+                .username(request.getUsername().trim())
+                .passwordHash(passwordHash)
+                .displayName(displayName)
+                .role(role)
+                .firstName(request.getFirstName().trim())
+                .lastName(request.getLastName().trim())
+                .title(request.getTitle() != null ? request.getTitle().trim() : null)
+                .email(email != null && !email.isBlank() ? email.trim() : null)
+                .mustResetPassword(true)
+                .parishAccesses(new HashSet<>())
+                .dioceseAccesses(new HashSet<>())
+                .build();
+
+        dioceseAdminParishSyncService.assignDiocesesAndSyncParishes(user, dioceseIds);
+
+        Long defaultParishId = request.getDefaultParishId();
+        if (defaultParishId != null) {
+            Set<Long> accessIds = user.getParishAccesses().stream()
+                    .map(Parish::getId)
+                    .collect(Collectors.toSet());
+            if (!accessIds.contains(defaultParishId)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "defaultParishId must be a parish in one of the assigned dioceses");
+            }
+            Parish defaultParish = parishRepository.findById(defaultParishId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Parish not found: " + defaultParishId));
+            user.setParish(defaultParish);
+        } else {
+            dioceseAdminParishSyncService.resolveDefaultParishAfterParishSync(user);
+        }
+
+        return toResponse(appUserRepository.save(user));
+    }
+
     private void requireSuperAdmin() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
@@ -149,6 +221,13 @@ public class AdminUserServiceImpl implements AdminUserService {
         return new HashSet<>(parishIds);
     }
 
+    private Set<Long> normalizeDioceseIds(Set<Long> dioceseIds) {
+        if (dioceseIds == null) {
+            return Collections.emptySet();
+        }
+        return new HashSet<>(dioceseIds);
+    }
+
     private String buildDisplayName(String title, String firstName, String lastName, String username) {
         StringBuilder sb = new StringBuilder();
         if (title != null && !title.isBlank()) {
@@ -168,6 +247,9 @@ public class AdminUserServiceImpl implements AdminUserService {
         Set<Long> parishAccessIds = user.getParishAccesses().stream()
                 .map(Parish::getId)
                 .collect(Collectors.toSet());
+        Set<Long> dioceseAccessIds = user.getDioceseAccesses().stream()
+                .map(Diocese::getId)
+                .collect(Collectors.toSet());
 
         return UserParishAccessResponse.builder()
                 .userId(user.getId())
@@ -176,6 +258,7 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .role(user.getRole())
                 .defaultParishId(user.getParish() != null ? user.getParish().getId() : null)
                 .parishAccessIds(parishAccessIds)
+                .dioceseAccessIds(dioceseAccessIds)
                 .build();
     }
 }

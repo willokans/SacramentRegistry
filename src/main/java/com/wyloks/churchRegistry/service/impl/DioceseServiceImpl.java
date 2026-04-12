@@ -171,6 +171,8 @@ public class DioceseServiceImpl implements DioceseService {
                 .dioceseName(e.getDioceseName())
                 .code(e.getCode())
                 .description(e.getDescription())
+                .countryCode(e.getCountryCode())
+                .countryName(e.getCountryName())
                 .parishes(parishes)
                 .build();
     }

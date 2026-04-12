@@ -12,8 +12,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Diocese-level dashboard endpoints. Returns aggregated counts, parish activity,
  * cross-parish recent sacraments, and monthly chart data.
- * Access: {@code SUPER_ADMIN} sees the full diocese; parish-scoped {@code ADMIN} sees the same metrics only for
- * parishes they are assigned to in this diocese (Option B). Cache keys include user scope.
+ * Access: {@code SUPER_ADMIN} sees the full diocese; {@code DIOCESE_ADMIN} sees metrics for parishes they administer
+ * in this diocese. Parish-scoped {@code ADMIN} is denied. Cache keys include user scope.
  */
 @RestController
 @RequestMapping("/api/dioceses")

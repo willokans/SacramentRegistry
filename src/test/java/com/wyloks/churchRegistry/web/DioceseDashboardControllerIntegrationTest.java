@@ -27,7 +27,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Integration tests for diocese dashboard endpoint: admin access and non-admin denial.
+ * Integration tests for diocese dashboard endpoint: {@code DIOCESE_ADMIN} / {@code SUPER_ADMIN} access and denial for other roles.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -53,10 +53,16 @@ class DioceseDashboardControllerIntegrationTest {
     AppUserRepository appUserRepository;
 
     private Diocese diocese;
+    /** Diocese with no parishes assigned to test users; used for cross-diocese denial. */
+    private Diocese otherDiocese;
     private Parish parish;
     private Parish otherParishInSameDiocese;
     private String parishPriestUsername;
     private String parishPriestPassword;
+    private String dioceseAdminUsername;
+    private String dioceseAdminPassword;
+    private String parishAdminUsername;
+    private String parishAdminPassword;
 
     @BeforeEach
     void setUp() {
@@ -64,6 +70,12 @@ class DioceseDashboardControllerIntegrationTest {
                 .dioceseName("Diocese Dashboard Test")
                 .code("DDT")
                 .description("Integration test diocese")
+                .build());
+
+        otherDiocese = dioceseRepository.save(Diocese.builder()
+                .dioceseName("Other Diocese No Access")
+                .code("ODNA")
+                .description("Integration test diocese without test user parishes")
                 .build());
 
         parish = parishRepository.save(Parish.builder()
@@ -81,6 +93,10 @@ class DioceseDashboardControllerIntegrationTest {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         parishPriestUsername = "priest_" + suffix;
         parishPriestPassword = "secret123";
+        dioceseAdminUsername = "diocese_admin_" + suffix;
+        dioceseAdminPassword = "secret123";
+        parishAdminUsername = "parish_admin_" + suffix;
+        parishAdminPassword = "secret123";
 
         AppUser parishPriest = AppUser.builder()
                 .username(parishPriestUsername)
@@ -92,17 +108,32 @@ class DioceseDashboardControllerIntegrationTest {
         parishPriest.getParishAccesses().add(parish);
         appUserRepository.save(parishPriest);
 
-        appUserRepository.findByUsername("admin").ifPresent(admin -> {
-            admin.setParish(parish);
-            admin.getParishAccesses().clear();
-            admin.getParishAccesses().add(parish);
-            appUserRepository.save(admin);
-        });
+        AppUser dioceseAdmin = AppUser.builder()
+                .username(dioceseAdminUsername)
+                .passwordHash(passwordEncoder.encode(dioceseAdminPassword))
+                .displayName("Diocese Admin")
+                .role("DIOCESE_ADMIN")
+                .parish(parish)
+                .build();
+        dioceseAdmin.getParishAccesses().clear();
+        dioceseAdmin.getParishAccesses().add(parish);
+        appUserRepository.save(dioceseAdmin);
+
+        AppUser parishAdmin = AppUser.builder()
+                .username(parishAdminUsername)
+                .passwordHash(passwordEncoder.encode(parishAdminPassword))
+                .displayName("Parish Admin")
+                .role("ADMIN")
+                .parish(parish)
+                .build();
+        parishAdmin.getParishAccesses().clear();
+        parishAdmin.getParishAccesses().add(parish);
+        appUserRepository.save(parishAdmin);
     }
 
     @Test
-    void admin_canAccessDioceseDashboard() throws Exception {
-        String token = login("admin", "password");
+    void dioceseAdmin_canAccessDioceseDashboard() throws Exception {
+        String token = login(dioceseAdminUsername, dioceseAdminPassword);
 
         String response = mvc.perform(get("/api/dioceses/{dioceseId}/dashboard", diocese.getId())
                         .header("Authorization", "Bearer " + token))
@@ -127,8 +158,8 @@ class DioceseDashboardControllerIntegrationTest {
     }
 
     @Test
-    void admin_dioceseDashboard_countsOnlyAssignedParishes_whenDioceseHasMultipleParishes() throws Exception {
-        String token = login("admin", "password");
+    void dioceseAdmin_dioceseDashboard_countsOnlyAssignedParishes_whenDioceseHasMultipleParishes() throws Exception {
+        String token = login(dioceseAdminUsername, dioceseAdminPassword);
 
         String response = mvc.perform(get("/api/dioceses/{dioceseId}/dashboard", diocese.getId())
                         .header("Authorization", "Bearer " + token))
@@ -153,6 +184,25 @@ class DioceseDashboardControllerIntegrationTest {
         mvc.perform(get("/api/dioceses/{dioceseId}/dashboard", diocese.getId())
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void parishAdmin_cannotAccessDioceseDashboard_returns403() throws Exception {
+        String token = login(parishAdminUsername, parishAdminPassword);
+
+        mvc.perform(get("/api/dioceses/{dioceseId}/dashboard", diocese.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void dioceseAdmin_cannotAccessUnassignedDioceseDashboard_returns403() throws Exception {
+        String token = login(dioceseAdminUsername, dioceseAdminPassword);
+
+        mvc.perform(get("/api/dioceses/{dioceseId}/dashboard", otherDiocese.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403));
     }
 
     @Test

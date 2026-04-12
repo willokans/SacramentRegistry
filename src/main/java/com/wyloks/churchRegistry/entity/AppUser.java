@@ -41,6 +41,19 @@ public class AppUser {
     @Builder.Default
     private Set<Parish> parishAccesses = new HashSet<>();
 
+    /**
+     * Diocese-level scope for {@code DIOCESE_ADMIN}; parish rows in {@link #parishAccesses} are kept in sync
+     * (all parishes in these dioceses) for RLS and existing parish-scoped checks.
+     */
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "app_user_diocese_access",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "diocese_id")
+    )
+    @Builder.Default
+    private Set<Diocese> dioceseAccesses = new HashSet<>();
+
     @Column(name = "role", length = 50)
     private String role;
 

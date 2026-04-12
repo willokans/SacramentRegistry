@@ -13,6 +13,9 @@ public interface ParishRepository extends JpaRepository<Parish, Long> {
     List<Parish> findByDioceseId(Long dioceseId);
 
     @EntityGraph(attributePaths = {"diocese"})
+    List<Parish> findByDioceseIdIn(Set<Long> dioceseIds);
+
+    @EntityGraph(attributePaths = {"diocese"})
     List<Parish> findByIdInAndDioceseId(Set<Long> parishIds, Long dioceseId);
 
     List<Parish> findByIdIn(Set<Long> parishIds);

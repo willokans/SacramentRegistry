@@ -1,7 +1,7 @@
 /**
  * TDD: Diocese Dashboard page tests.
- * - Non-ADMIN/SUPER_ADMIN redirects to /dashboard
- * - When no diocese selected, shows select-diocese message
+ * - Non–diocese-dashboard roles (e.g. PRIEST, parish ADMIN) redirect to /dashboard
+ * - SUPER_ADMIN and DIOCESE_ADMIN may access; when no diocese selected, shows select-diocese message
  * - When diocese selected, fetches and displays diocese dashboard data
  * - Sortable parish table, stat cards, chart, recent sacraments with parish
  */
@@ -113,6 +113,28 @@ describe('Diocese Dashboard page', () => {
     });
   });
 
+  it('redirects parish ADMIN to /dashboard', async () => {
+    const api = require('@/lib/api');
+    api.getStoredUser.mockReturnValue({
+      username: 'admin',
+      displayName: 'Parish Admin',
+      role: 'ADMIN',
+    });
+    api.getStoredToken.mockReturnValue('jwt-123');
+    localStorage.setItem('church_registry_token', 'jwt-123');
+    localStorage.setItem('church_registry_user', JSON.stringify({
+      username: 'admin',
+      displayName: 'Parish Admin',
+      role: 'ADMIN',
+    }));
+
+    render(<TestWrapper><DioceseDashboardPage /></TestWrapper>);
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith('/dashboard');
+    });
+  });
+
   it('shows Redirecting… and does not fetch for non-admin users', async () => {
     const api = require('@/lib/api');
     api.getStoredUser.mockReturnValue({
@@ -148,14 +170,14 @@ describe('Diocese Dashboard page', () => {
     api.getStoredUser.mockReturnValue({
       username: 'admin',
       displayName: 'Administrator',
-      role: 'ADMIN',
+      role: 'DIOCESE_ADMIN',
     });
     api.getStoredToken.mockReturnValue('jwt-123');
     localStorage.setItem('church_registry_token', 'jwt-123');
     localStorage.setItem('church_registry_user', JSON.stringify({
       username: 'admin',
       displayName: 'Administrator',
-      role: 'ADMIN',
+      role: 'DIOCESE_ADMIN',
     }));
     const { useParish } = require('@/context/ParishContext');
     useParish.mockReturnValue({
@@ -176,14 +198,14 @@ describe('Diocese Dashboard page', () => {
     api.getStoredUser.mockReturnValue({
       username: 'admin',
       displayName: 'Administrator',
-      role: 'ADMIN',
+      role: 'DIOCESE_ADMIN',
     });
     api.getStoredToken.mockReturnValue('jwt-123');
     localStorage.setItem('church_registry_token', 'jwt-123');
     localStorage.setItem('church_registry_user', JSON.stringify({
       username: 'admin',
       displayName: 'Administrator',
-      role: 'ADMIN',
+      role: 'DIOCESE_ADMIN',
     }));
 
     render(<TestWrapper><DioceseDashboardPage /></TestWrapper>);
@@ -205,7 +227,7 @@ describe('Diocese Dashboard page', () => {
     api.getStoredUser.mockReturnValue({
       username: 'admin',
       displayName: 'Administrator',
-      role: 'ADMIN',
+      role: 'DIOCESE_ADMIN',
     });
     api.getStoredToken.mockReturnValue('jwt-123');
     api.fetchDioceseDashboard.mockImplementation(() => new Promise(() => {}));
@@ -213,7 +235,7 @@ describe('Diocese Dashboard page', () => {
     localStorage.setItem('church_registry_user', JSON.stringify({
       username: 'admin',
       displayName: 'Administrator',
-      role: 'ADMIN',
+      role: 'DIOCESE_ADMIN',
     }));
 
     render(<TestWrapper><DioceseDashboardPage /></TestWrapper>);
@@ -226,7 +248,7 @@ describe('Diocese Dashboard page', () => {
     api.getStoredUser.mockReturnValue({
       username: 'admin',
       displayName: 'Administrator',
-      role: 'ADMIN',
+      role: 'DIOCESE_ADMIN',
     });
     api.getStoredToken.mockReturnValue('jwt-123');
     api.fetchDioceseDashboard.mockRejectedValue(new Error('Network error'));
@@ -234,7 +256,7 @@ describe('Diocese Dashboard page', () => {
     localStorage.setItem('church_registry_user', JSON.stringify({
       username: 'admin',
       displayName: 'Administrator',
-      role: 'ADMIN',
+      role: 'DIOCESE_ADMIN',
     }));
 
     render(<TestWrapper><DioceseDashboardPage /></TestWrapper>);
@@ -272,14 +294,14 @@ describe('Diocese Dashboard page', () => {
     api.getStoredUser.mockReturnValue({
       username: 'admin',
       displayName: 'Administrator',
-      role: 'ADMIN',
+      role: 'DIOCESE_ADMIN',
     });
     api.getStoredToken.mockReturnValue('jwt-123');
     localStorage.setItem('church_registry_token', 'jwt-123');
     localStorage.setItem('church_registry_user', JSON.stringify({
       username: 'admin',
       displayName: 'Administrator',
-      role: 'ADMIN',
+      role: 'DIOCESE_ADMIN',
     }));
 
     render(<TestWrapper><DioceseDashboardPage /></TestWrapper>);
@@ -303,7 +325,7 @@ describe('Diocese Dashboard page', () => {
     api.getStoredUser.mockReturnValue({
       username: 'admin',
       displayName: 'Administrator',
-      role: 'ADMIN',
+      role: 'DIOCESE_ADMIN',
     });
     api.getStoredToken.mockReturnValue('jwt-123');
     api.fetchDioceseDashboard.mockResolvedValue({
@@ -317,7 +339,7 @@ describe('Diocese Dashboard page', () => {
     localStorage.setItem('church_registry_user', JSON.stringify({
       username: 'admin',
       displayName: 'Administrator',
-      role: 'ADMIN',
+      role: 'DIOCESE_ADMIN',
     }));
 
     render(<TestWrapper><DioceseDashboardPage /></TestWrapper>);
@@ -344,14 +366,14 @@ describe('Diocese Dashboard page', () => {
     api.getStoredUser.mockReturnValue({
       username: 'admin',
       displayName: 'Administrator',
-      role: 'ADMIN',
+      role: 'DIOCESE_ADMIN',
     });
     api.getStoredToken.mockReturnValue('jwt-123');
     localStorage.setItem('church_registry_token', 'jwt-123');
     localStorage.setItem('church_registry_user', JSON.stringify({
       username: 'admin',
       displayName: 'Administrator',
-      role: 'ADMIN',
+      role: 'DIOCESE_ADMIN',
     }));
 
     render(<TestWrapper><DioceseDashboardPage /></TestWrapper>);
@@ -371,7 +393,7 @@ describe('Diocese Dashboard page', () => {
     api.getStoredUser.mockReturnValue({
       username: 'admin',
       displayName: 'Administrator',
-      role: 'ADMIN',
+      role: 'DIOCESE_ADMIN',
     });
     api.getStoredToken.mockReturnValue('jwt-123');
     api.fetchDioceseDashboard.mockResolvedValue({
@@ -396,7 +418,7 @@ describe('Diocese Dashboard page', () => {
     localStorage.setItem('church_registry_user', JSON.stringify({
       username: 'admin',
       displayName: 'Administrator',
-      role: 'ADMIN',
+      role: 'DIOCESE_ADMIN',
     }));
 
     render(<TestWrapper><DioceseDashboardPage /></TestWrapper>);
@@ -413,7 +435,7 @@ describe('Diocese Dashboard page', () => {
     api.getStoredUser.mockReturnValue({
       username: 'admin',
       displayName: 'Administrator',
-      role: 'ADMIN',
+      role: 'DIOCESE_ADMIN',
     });
     api.getStoredToken.mockReturnValue('jwt-123');
     api.fetchDioceseDashboard.mockResolvedValue({
@@ -424,7 +446,7 @@ describe('Diocese Dashboard page', () => {
     localStorage.setItem('church_registry_user', JSON.stringify({
       username: 'admin',
       displayName: 'Administrator',
-      role: 'ADMIN',
+      role: 'DIOCESE_ADMIN',
     }));
 
     render(<TestWrapper><DioceseDashboardPage /></TestWrapper>);
@@ -440,7 +462,7 @@ describe('Diocese Dashboard page', () => {
     api.getStoredUser.mockReturnValue({
       username: 'admin',
       displayName: 'Administrator',
-      role: 'ADMIN',
+      role: 'DIOCESE_ADMIN',
     });
     api.getStoredToken.mockReturnValue('jwt-123');
     api.fetchDioceseDashboard.mockResolvedValue({
@@ -456,7 +478,7 @@ describe('Diocese Dashboard page', () => {
     localStorage.setItem('church_registry_user', JSON.stringify({
       username: 'admin',
       displayName: 'Administrator',
-      role: 'ADMIN',
+      role: 'DIOCESE_ADMIN',
     }));
 
     render(<TestWrapper><DioceseDashboardPage /></TestWrapper>);

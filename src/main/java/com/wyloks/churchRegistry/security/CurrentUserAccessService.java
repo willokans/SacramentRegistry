@@ -36,6 +36,19 @@ public class CurrentUserAccessService {
         return currentUser().isSuperAdmin();
     }
 
+    /** True when the current principal is {@code DIOCESE_ADMIN}. */
+    public boolean isDioceseAdmin() {
+        return currentUser().isDioceseAdmin();
+    }
+
+    /**
+     * True when the caller may use the diocesan dashboard API ({@code SUPER_ADMIN} or {@code DIOCESE_ADMIN}).
+     * Parish-scoped {@code ADMIN} must not use diocese-wide aggregates.
+     */
+    public boolean canAccessDioceseDashboard() {
+        return currentUser().canAccessDioceseDashboard();
+    }
+
     /**
      * Returns the username of the currently authenticated user.
      * @throws ResponseStatusException 403 if not authenticated
@@ -65,15 +78,23 @@ public class CurrentUserAccessService {
 
     public record CurrentUserAccess(String username, String role, Set<Long> parishIds) {
         /**
-         * True for {@code ADMIN} or {@code SUPER_ADMIN}.
+         * True for parish {@code ADMIN}, {@code DIOCESE_ADMIN}, or {@code SUPER_ADMIN}.
          * Prefer {@link #isSuperAdmin()} when the decision is global bypass vs parish-scoped access.
          */
         public boolean isAdmin() {
-            return "ADMIN".equals(role) || "SUPER_ADMIN".equals(role);
+            return "ADMIN".equals(role) || "DIOCESE_ADMIN".equals(role) || "SUPER_ADMIN".equals(role);
         }
 
         public boolean isSuperAdmin() {
             return "SUPER_ADMIN".equals(role);
+        }
+
+        public boolean isDioceseAdmin() {
+            return "DIOCESE_ADMIN".equals(role);
+        }
+
+        public boolean canAccessDioceseDashboard() {
+            return isSuperAdmin() || isDioceseAdmin();
         }
     }
 }

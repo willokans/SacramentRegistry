@@ -1,0 +1,36 @@
+databaseChangeLog:
+  - changeSet:
+      id: 029-app-user-diocese-access
+      author: church-registry
+      changes:
+        - createTable:
+            tableName: app_user_diocese_access
+            columns:
+              - column:
+                  name: user_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: diocese_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: app_user_diocese_access
+            columnNames: user_id, diocese_id
+            constraintName: pk_app_user_diocese_access
+        - addForeignKeyConstraint:
+            baseTableName: app_user_diocese_access
+            baseColumnNames: user_id
+            referencedTableName: app_user
+            referencedColumnNames: id
+            onDelete: CASCADE
+            constraintName: fk_app_user_diocese_access_user
+        - addForeignKeyConstraint:
+            baseTableName: app_user_diocese_access
+            baseColumnNames: diocese_id
+            referencedTableName: diocese
+            referencedColumnNames: id
+            onDelete: CASCADE
+            constraintName: fk_app_user_diocese_access_diocese

@@ -93,8 +93,8 @@ public class CacheConfig {
     }
 
     /**
-     * Diocese dashboard responses must not be shared across users: parish-scoped ADMIN sees different
-     * aggregates than SUPER_ADMIN or another ADMIN.
+     * Diocese dashboard responses must not be shared across users: {@code DIOCESE_ADMIN} scope differs from
+     * {@code SUPER_ADMIN} and from other users' parish sets.
      */
     @Bean
     public DioceseDashboardCacheKeyGenerator dioceseDashboardCacheKeyGenerator(CurrentUserAccessService currentUserAccessService) {

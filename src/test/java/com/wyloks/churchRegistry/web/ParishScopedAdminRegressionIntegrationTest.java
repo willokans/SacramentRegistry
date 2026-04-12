@@ -14,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -27,7 +28,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Regression tests for parish-scoped {@code ADMIN} vs {@code SUPER_ADMIN}: directory IDOR, escalation,
- * invitation scope, and diocese/parish list cache isolation (see plan: tests-and-migration-note).
+ * invitation scope, diocese/parish list cache isolation, country-scoped search, and absence of an unscoped
+ * {@code /api/dioceses/countries} listing (see plan: security isolation).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -53,8 +55,8 @@ class ParishScopedAdminRegressionIntegrationTest {
     void setUp() throws Exception {
         superToken = login("superadmin", "password");
         long seed = System.nanoTime();
-        diocese1Id = createDiocese(superToken, "Reg Diocese One " + seed, "R1" + (seed % 10000));
-        diocese2Id = createDiocese(superToken, "Reg Diocese Two " + seed, "R2" + (seed % 10000));
+        diocese1Id = createDiocese(superToken, "Reg Diocese One " + seed, "R1" + (seed % 10000), "US", "United States");
+        diocese2Id = createDiocese(superToken, "Reg Diocese Two " + seed, "R2" + (seed % 10000), "US", "United States");
         parish1Id = createParish(superToken, diocese1Id, "Reg Parish One " + seed);
         parish2Id = createParish(superToken, diocese2Id, "Reg Parish Two " + seed);
     }
@@ -259,6 +261,119 @@ class ParishScopedAdminRegressionIntegrationTest {
         assertThat(nativeCacheSize(cache)).isEqualTo(2);
     }
 
+    @Test
+    void scopedAdmin_getParishesByForeignDiocese_returnsEmptyList() throws Exception {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        createUser(superToken, Map.of(
+                "username", "scoped_parlist_" + suffix,
+                "email", "scoped_parlist_" + suffix + "@test.local",
+                "firstName", "Par",
+                "lastName", "List" + suffix,
+                "title", "Mr",
+                "role", "ADMIN",
+                "defaultParishId", parish1Id,
+                "parishIds", Set.of(parish1Id),
+                "defaultPassword", "secret12345"
+        ));
+        String scopedToken = login("scoped_parlist_" + suffix, "secret12345");
+
+        String body = mvc.perform(get("/api/dioceses/{dioceseId}/parishes", diocese2Id)
+                        .header("Authorization", bearer(scopedToken)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        JsonNode arr = objectMapper.readTree(body);
+        assertThat(arr.isArray()).isTrue();
+        assertThat(arr.size()).isEqualTo(0);
+    }
+
+    @Test
+    void scopedAdmin_searchDiocesesByCountry_returnsOnlyDiocesesWithParishAccess() throws Exception {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        createUser(superToken, Map.of(
+                "username", "scoped_search_" + suffix,
+                "email", "scoped_search_" + suffix + "@test.local",
+                "firstName", "Sea",
+                "lastName", "Rch" + suffix,
+                "title", "Mr",
+                "role", "ADMIN",
+                "defaultParishId", parish1Id,
+                "parishIds", Set.of(parish1Id),
+                "defaultPassword", "secret12345"
+        ));
+        String scopedToken = login("scoped_search_" + suffix, "secret12345");
+
+        String body = mvc.perform(get("/api/dioceses/search")
+                        .param("countryCode", "US")
+                        .header("Authorization", bearer(scopedToken)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        JsonNode arr = objectMapper.readTree(body);
+        assertThat(arr.isArray()).isTrue();
+        assertThat(arr.size()).isEqualTo(1);
+        assertThat(arr.get(0).get("id").asLong()).isEqualTo(diocese1Id);
+    }
+
+    @Test
+    void dioceseAdmin_searchDiocesesByCountry_returnsOnlyAssignedDioceses() throws Exception {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        Map<String, Object> request = new HashMap<>();
+        request.put("username", "da_search_iso_" + suffix);
+        request.put("email", "da_search_iso_" + suffix + "@test.local");
+        request.put("firstName", "DA");
+        request.put("lastName", "Search" + suffix);
+        request.put("title", "Mr");
+        request.put("role", "DIOCESE_ADMIN");
+        request.put("dioceseIds", Set.of(diocese1Id));
+        request.put("parishIds", Set.of());
+        request.put("defaultPassword", "secret12345");
+        createUser(superToken, request);
+
+        String daToken = login("da_search_iso_" + suffix, "secret12345");
+
+        String body = mvc.perform(get("/api/dioceses/search")
+                        .param("countryCode", "US")
+                        .header("Authorization", bearer(daToken)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        JsonNode arr = objectMapper.readTree(body);
+        assertThat(arr.isArray()).isTrue();
+        assertThat(arr.size()).isEqualTo(1);
+        assertThat(arr.get(0).get("id").asLong()).isEqualTo(diocese1Id);
+    }
+
+    @Test
+    void apiDiocesesCountries_doesNotReturnOk_unscopedCountryListingMustNotExist() throws Exception {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        createUser(superToken, Map.of(
+                "username", "scoped_countries_" + suffix,
+                "email", "scoped_countries_" + suffix + "@test.local",
+                "firstName", "Coun",
+                "lastName", "Try" + suffix,
+                "title", "Mr",
+                "role", "ADMIN",
+                "defaultParishId", parish1Id,
+                "parishIds", Set.of(parish1Id),
+                "defaultPassword", "secret12345"
+        ));
+        String scopedToken = login("scoped_countries_" + suffix, "secret12345");
+
+        int status = mvc.perform(get("/api/dioceses/countries")
+                        .header("Authorization", bearer(scopedToken)))
+                .andReturn()
+                .getResponse()
+                .getStatus();
+        assertThat(status).isNotEqualTo(200);
+    }
+
     private static int nativeCacheSize(Cache cache) {
         Object nativeCache = cache.getNativeCache();
         if (nativeCache instanceof Map<?, ?> map) {
@@ -292,13 +407,23 @@ class ParishScopedAdminRegressionIntegrationTest {
     }
 
     private Long createDiocese(String token, String name, String code) throws Exception {
-        String request = objectMapper.writeValueAsString(
-                Map.of("dioceseName", name, "code", code, "description", "Regression test diocese")
-        );
+        return createDiocese(token, name, code, null, null);
+    }
+
+    private Long createDiocese(String token, String name, String code, String countryCode, String countryName)
+            throws Exception {
+        Map<String, Object> body = new HashMap<>();
+        body.put("dioceseName", name);
+        body.put("code", code);
+        body.put("description", "Regression test diocese");
+        if (countryCode != null && !countryCode.isBlank()) {
+            body.put("countryCode", countryCode);
+            body.put("countryName", countryName != null ? countryName : "Test Country");
+        }
         String response = mvc.perform(post("/api/dioceses")
                         .header("Authorization", bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(request))
+                        .content(objectMapper.writeValueAsString(body)))
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()

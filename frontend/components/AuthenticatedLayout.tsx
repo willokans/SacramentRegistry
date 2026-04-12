@@ -1,14 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { getStoredToken, getStoredUser, clearAuth } from '@/lib/api';
+import { sameNumericId } from '@/lib/sameNumericId';
+import { canSeeDioceseDashboard, normalizeAppRole } from '@/lib/appRoles';
 import { useParish } from '@/context/ParishContext';
 import { getChurchBranding } from '@/lib/church-branding';
 import { useNetworkStatus } from '@/lib/offline/network';
 import { useOfflineQueueReplayer } from '@/lib/offline/useOfflineQueueReplayer';
+import {
+  UNSPECIFIED_COUNTRY_KEY,
+  countryFilterLabelForKey,
+  dioceseSidebarCountryKey,
+} from '@/lib/sidebarCountryFilter';
 import RetryFailedSubmissionsBanner from '@/components/offline/RetryFailedSubmissionsBanner';
 import OfflineStorageHygieneBanner from '@/components/offline/OfflineStorageHygieneBanner';
 import ConflictResolutionDialog from '@/components/offline/ConflictResolutionDialog';
@@ -59,7 +66,19 @@ export default function AuthenticatedLayout({
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { parishId, setParishId, dioceseId, setDioceseId, parishes = [], dioceses = [], loading: parishLoading, error: parishError, refetch } = useParish();
+  const {
+    parishId,
+    setParishId,
+    dioceseId,
+    setDioceseId,
+    sidebarCountryKey,
+    setSidebarCountryKey,
+    parishes = [],
+    dioceses = [],
+    loading: parishLoading,
+    error: parishError,
+    refetch,
+  } = useParish();
 
   const { isOnline } = useNetworkStatus();
   useOfflineQueueReplayer();
@@ -92,6 +111,53 @@ export default function AuthenticatedLayout({
     };
   }, [mobileMenuOpen]);
 
+  const countryOptions = useMemo(() => {
+    const byKey = new Map<string, (typeof dioceses)[0]>();
+    for (const d of dioceses) {
+      if (d == null || typeof d !== 'object') continue;
+      try {
+        const key = dioceseSidebarCountryKey(d);
+        if (!byKey.has(key)) byKey.set(key, d);
+      } catch {
+        /* ignore malformed row */
+      }
+    }
+    const opts = [...byKey.entries()]
+      .map(([key, sample]) => ({
+        key,
+        label: countryFilterLabelForKey(key, sample),
+      }))
+      .sort((a, b) => {
+        const byLabel = a.label.localeCompare(b.label, 'en', { sensitivity: 'base', numeric: true });
+        if (byLabel !== 0) return byLabel;
+        return a.key.localeCompare(b.key, 'en');
+      });
+    if (opts.length === 0 && dioceses.length > 0) {
+      return [{ key: UNSPECIFIED_COUNTRY_KEY, label: 'Unspecified' }];
+    }
+    return opts;
+  }, [dioceses]);
+
+  const diocesesForSelect = useMemo(() => {
+    const list =
+      sidebarCountryKey == null
+        ? dioceses
+        : dioceses.filter((d) => dioceseSidebarCountryKey(d) === sidebarCountryKey);
+    return [...list].sort((a, b) => {
+      const nameA = (a.dioceseName ?? '').trim();
+      const nameB = (b.dioceseName ?? '').trim();
+      const byName = nameA.localeCompare(nameB, 'en', { sensitivity: 'base', numeric: true });
+      if (byName !== 0) return byName;
+      return Number(a.id) - Number(b.id);
+    });
+  }, [dioceses, sidebarCountryKey]);
+
+  /** Avoid invalid controlled value (no matching option) which shows as an empty Country field. */
+  const countrySelectValue = useMemo(() => {
+    if (sidebarCountryKey == null) return '';
+    return countryOptions.some((o) => o.key === sidebarCountryKey) ? sidebarCountryKey : '';
+  }, [sidebarCountryKey, countryOptions]);
+
   function handleLogout() {
     clearAuth();
     router.push('/');
@@ -116,10 +182,15 @@ export default function AuthenticatedLayout({
   }
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
-  const isAdmin = user.role === 'ADMIN';
-  const isSuperAdmin = user.role === 'SUPER_ADMIN';
+  const role = normalizeAppRole(user.role);
+  const isAdmin = role === 'ADMIN';
+  const isSuperAdmin = role === 'SUPER_ADMIN';
+  const isDioceseAdmin = role === 'DIOCESE_ADMIN';
+  const isDioceseDashboardViewer = canSeeDioceseDashboard(user.role);
+  const showsDioceseParishSelectors = isAdmin || isSuperAdmin || isDioceseAdmin;
 
-  const currentParish = parishId != null ? parishes.find((p) => p.id === parishId) : undefined;
+  const currentParish =
+    parishId != null ? parishes.find((p) => sameNumericId(p.id, parishId)) : undefined;
   const churchBranding = getChurchBranding(currentParish?.parishName);
 
   return (
@@ -211,25 +282,47 @@ export default function AuthenticatedLayout({
             </div>
             {!parishLoading && (
               <div className="p-4 border-b border-gray-100 space-y-4">
-                {(isAdmin || isSuperAdmin) && dioceses.length > 0 && (
-                  <div>
-                    <label htmlFor="diocese-select-mobile" className="block text-xs font-medium text-gray-500 mb-1">
-                      Diocese
-                    </label>
-                    <select
-                      id="diocese-select-mobile"
-                      value={dioceseId ?? ''}
-                      onChange={(e) => setDioceseId(e.target.value ? Number(e.target.value) : null)}
-                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900 focus:border-sancta-maroon focus:outline-none focus:ring-1 focus:ring-sancta-maroon"
-                    >
-                      <option value="">All dioceses</option>
-                      {dioceses.map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.dioceseName}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                {showsDioceseParishSelectors && dioceses.length > 0 && (
+                  <>
+                    <div>
+                      <label htmlFor="country-select-mobile" className="block text-xs font-medium text-gray-500 mb-1">
+                        Country
+                      </label>
+                      <select
+                        id="country-select-mobile"
+                        value={countrySelectValue}
+                        onChange={(e) =>
+                          setSidebarCountryKey(e.target.value === '' ? null : e.target.value)
+                        }
+                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900 focus:border-sancta-maroon focus:outline-none focus:ring-1 focus:ring-sancta-maroon"
+                      >
+                        <option value="">All countries</option>
+                        {countryOptions.map(({ key, label }) => (
+                          <option key={key} value={key}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="diocese-select-mobile" className="block text-xs font-medium text-gray-500 mb-1">
+                        Diocese
+                      </label>
+                      <select
+                        id="diocese-select-mobile"
+                        value={dioceseId ?? ''}
+                        onChange={(e) => setDioceseId(e.target.value ? Number(e.target.value) : null)}
+                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900 focus:border-sancta-maroon focus:outline-none focus:ring-1 focus:ring-sancta-maroon"
+                      >
+                        <option value="">All dioceses</option>
+                        {diocesesForSelect.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.dioceseName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
                 )}
                 <div>
                   <label htmlFor="parish-select-mobile" className="block text-xs font-medium text-gray-500 mb-1">
@@ -252,10 +345,10 @@ export default function AuthenticatedLayout({
                   </select>
                 ) : (
                   <p className="text-sm text-gray-500 mb-1">
-                    {(isAdmin || isSuperAdmin) ? 'No parish selected' : 'No parish assigned. Contact admin.'}
+                    {showsDioceseParishSelectors ? 'No parish selected' : 'No parish assigned. Contact admin.'}
                   </p>
                 )}
-                {(isAdmin || isSuperAdmin) && (
+                {showsDioceseParishSelectors && (
                   <Link
                     href="/parishes"
                     prefetch={false}
@@ -283,12 +376,10 @@ export default function AuthenticatedLayout({
             <nav className="flex-1 p-4" aria-label="Main">
               <ul className="space-y-1">
                 {[
-                  ...(isAdmin || isSuperAdmin ? [{ href: '/dashboard/diocese', label: 'Diocese Dashboard' }] : []),
+                  ...(isDioceseDashboardViewer ? [{ href: '/dashboard/diocese', label: 'Diocese Dashboard' }] : []),
                   { href: '/dashboard', label: 'Parish Dashboard' },
                   ...(isAdmin || isSuperAdmin
-                    ? [
-                        { href: '/settings', label: 'Administration' },
-                      ]
+                    ? [{ href: '/settings', label: 'Administration' }]
                     : []),
                   { href: '/baptisms', label: 'Baptisms' },
                   { href: '/communions', label: 'Holy Communion' },
@@ -361,25 +452,47 @@ export default function AuthenticatedLayout({
         </div>
         {!parishLoading && (
           <div className="mb-4 px-2 space-y-4">
-            {(isAdmin || isSuperAdmin) && dioceses.length > 0 && (
-              <div>
-                <label htmlFor="diocese-select" className="block text-xs font-medium text-gray-500 mb-1">
-                  Diocese
-                </label>
-                <select
-                  id="diocese-select"
-                  value={dioceseId ?? ''}
-                  onChange={(e) => setDioceseId(e.target.value ? Number(e.target.value) : null)}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-sancta-maroon focus:outline-none focus:ring-1 focus:ring-sancta-maroon"
-                >
-                  <option value="">All dioceses</option>
-                  {dioceses.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.dioceseName}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {showsDioceseParishSelectors && dioceses.length > 0 && (
+              <>
+                <div>
+                  <label htmlFor="country-select" className="block text-xs font-medium text-gray-500 mb-1">
+                    Country
+                  </label>
+                  <select
+                    id="country-select"
+                    value={countrySelectValue}
+                    onChange={(e) =>
+                      setSidebarCountryKey(e.target.value === '' ? null : e.target.value)
+                    }
+                    className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-sancta-maroon focus:outline-none focus:ring-1 focus:ring-sancta-maroon"
+                  >
+                    <option value="">All countries</option>
+                    {countryOptions.map(({ key, label }) => (
+                      <option key={key} value={key}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="diocese-select" className="block text-xs font-medium text-gray-500 mb-1">
+                    Diocese
+                  </label>
+                  <select
+                    id="diocese-select"
+                    value={dioceseId ?? ''}
+                    onChange={(e) => setDioceseId(e.target.value ? Number(e.target.value) : null)}
+                    className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-sancta-maroon focus:outline-none focus:ring-1 focus:ring-sancta-maroon"
+                  >
+                    <option value="">All dioceses</option>
+                    {diocesesForSelect.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.dioceseName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
             )}
             <div>
               <label htmlFor="parish-select" className="block text-xs font-medium text-gray-500 mb-1">
@@ -400,10 +513,10 @@ export default function AuthenticatedLayout({
               </select>
             ) : (
               <p className="text-sm text-gray-500 mb-1">
-                {(isAdmin || isSuperAdmin) ? 'No parish selected' : 'No parish assigned. Contact admin.'}
+                {showsDioceseParishSelectors ? 'No parish selected' : 'No parish assigned. Contact admin.'}
               </p>
             )}
-            {(isAdmin || isSuperAdmin) && (
+            {showsDioceseParishSelectors && (
               <Link
                 href="/parishes"
                 className="text-xs text-sancta-maroon hover:underline"
@@ -428,7 +541,7 @@ export default function AuthenticatedLayout({
         )}
         <nav className="flex-1" aria-label="Main">
           <ul className="space-y-1">
-            {(isAdmin || isSuperAdmin) && (
+            {isDioceseDashboardViewer && (
               <li>
                 <Link
                   href="/dashboard/diocese"

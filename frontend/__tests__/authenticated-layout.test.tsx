@@ -16,10 +16,14 @@ jest.mock('next/navigation', () => ({
   usePathname: jest.fn(),
 }));
 
-jest.mock('@/lib/api', () => ({
-  getStoredToken: jest.fn(),
-  getStoredUser: jest.fn(),
-}));
+jest.mock('@/lib/api', () => {
+  const actual = jest.requireActual<typeof import('@/lib/api')>('@/lib/api');
+  return {
+    ...actual,
+    getStoredToken: jest.fn(),
+    getStoredUser: jest.fn(),
+  };
+});
 
 jest.mock('@/context/ParishContext', () => ({
   useParish: jest.fn(),
@@ -108,7 +112,36 @@ describe('AuthenticatedLayout', () => {
     expect(dashboardLink).toHaveAttribute('href', '/dashboard');
   });
 
-  it('ADMIN sees Diocese Dashboard link pointing to /dashboard/diocese', () => {
+  it('parish ADMIN does not see Diocese Dashboard link', () => {
+    render(
+      <AuthenticatedLayout>
+        <p>Dashboard content</p>
+      </AuthenticatedLayout>
+    );
+    expect(screen.queryByRole('link', { name: 'Diocese Dashboard' })).not.toBeInTheDocument();
+  });
+
+  it('DIOCESE_ADMIN sees Diocese Dashboard link pointing to /dashboard/diocese', () => {
+    (getStoredUser as jest.Mock).mockReturnValue({
+      username: 'dioadmin',
+      displayName: 'Diocese Admin',
+      role: 'DIOCESE_ADMIN',
+    });
+    render(
+      <AuthenticatedLayout>
+        <p>Dashboard content</p>
+      </AuthenticatedLayout>
+    );
+    const dioceseDashboardLink = screen.getByRole('link', { name: 'Diocese Dashboard' });
+    expect(dioceseDashboardLink).toHaveAttribute('href', '/dashboard/diocese');
+  });
+
+  it('SUPER_ADMIN sees Diocese Dashboard link pointing to /dashboard/diocese', () => {
+    (getStoredUser as jest.Mock).mockReturnValue({
+      username: 'superadmin',
+      displayName: 'Super Administrator',
+      role: 'SUPER_ADMIN',
+    });
     render(
       <AuthenticatedLayout>
         <p>Dashboard content</p>
@@ -293,6 +326,120 @@ describe('AuthenticatedLayout', () => {
     expect(dioceseSelect).toBeInTheDocument();
     expect(within(dioceseSelect).getByRole('option', { name: 'Archdiocese of Accra' })).toBeInTheDocument();
     expect(within(dioceseSelect).getByRole('option', { name: 'Diocese of Kumasi' })).toBeInTheDocument();
+  });
+
+  it('Diocese selector lists dioceses alphabetically by name (not API order)', () => {
+    (useParish as jest.Mock).mockReturnValue({
+      ...defaultParishContext,
+      sidebarCountryKey: null,
+      dioceses: [
+        { id: 3, dioceseName: 'Lagos', countryCode: 'NG', parishes: [] },
+        { id: 1, dioceseName: 'Abuja', countryCode: 'NG', parishes: [] },
+        { id: 2, dioceseName: 'Kano', countryCode: 'NG', parishes: [] },
+      ],
+    });
+    render(
+      <AuthenticatedLayout>
+        <p>Dashboard content</p>
+      </AuthenticatedLayout>
+    );
+    const dioceseSelect = document.getElementById('diocese-select') as HTMLSelectElement;
+    expect(dioceseSelect).toBeTruthy();
+    const labels = within(dioceseSelect)
+      .getAllByRole('option')
+      .map((opt) => opt.textContent?.trim() ?? '');
+    expect(labels).toEqual(['All dioceses', 'Abuja', 'Kano', 'Lagos']);
+  });
+
+  it('ADMIN sees Country selector with distinct countries and All countries', () => {
+    (useParish as jest.Mock).mockReturnValue({
+      ...defaultParishContext,
+      sidebarCountryKey: null,
+      setSidebarCountryKey: jest.fn(),
+      dioceses: [
+        { id: 1, dioceseName: 'D1', countryCode: 'GH', countryName: 'Ghana', parishes: [] },
+        { id: 2, dioceseName: 'D2', countryCode: 'KE', countryName: 'Kenya', parishes: [] },
+      ],
+    });
+    render(
+      <AuthenticatedLayout>
+        <p>Dashboard content</p>
+      </AuthenticatedLayout>
+    );
+    const countrySelect = document.getElementById('country-select') as HTMLSelectElement;
+    expect(countrySelect).toBeTruthy();
+    expect(within(countrySelect).getByRole('option', { name: 'All countries' })).toBeInTheDocument();
+    expect(within(countrySelect).getByRole('option', { name: 'Ghana' })).toBeInTheDocument();
+    expect(within(countrySelect).getByRole('option', { name: 'Kenya' })).toBeInTheDocument();
+  });
+
+  it('Country selector lists countries alphabetically by display name (not API order)', () => {
+    (useParish as jest.Mock).mockReturnValue({
+      ...defaultParishContext,
+      sidebarCountryKey: null,
+      setSidebarCountryKey: jest.fn(),
+      dioceses: [
+        { id: 3, dioceseName: 'D3', countryCode: 'NG', countryName: 'Nigeria', parishes: [] },
+        { id: 1, dioceseName: 'D1', countryCode: 'KE', countryName: 'Kenya', parishes: [] },
+        { id: 2, dioceseName: 'D2', countryCode: 'GH', countryName: 'Ghana', parishes: [] },
+      ],
+    });
+    render(
+      <AuthenticatedLayout>
+        <p>Dashboard content</p>
+      </AuthenticatedLayout>
+    );
+    const countrySelect = document.getElementById('country-select') as HTMLSelectElement;
+    expect(countrySelect).toBeTruthy();
+    const labels = within(countrySelect)
+      .getAllByRole('option')
+      .map((opt) => opt.textContent?.trim() ?? '');
+    expect(labels).toEqual(['All countries', 'Ghana', 'Kenya', 'Nigeria']);
+  });
+
+  it('changing Country calls setSidebarCountryKey with code or null for All countries', async () => {
+    const user = userEvent.setup();
+    const setSidebarCountryKey = jest.fn();
+    (useParish as jest.Mock).mockReturnValue({
+      ...defaultParishContext,
+      sidebarCountryKey: null,
+      setSidebarCountryKey,
+      dioceses: [
+        { id: 1, dioceseName: 'D1', countryCode: 'GH', countryName: 'Ghana', parishes: [] },
+        { id: 2, dioceseName: 'D2', countryCode: 'KE', countryName: 'Kenya', parishes: [] },
+      ],
+    });
+    render(
+      <AuthenticatedLayout>
+        <p>Dashboard content</p>
+      </AuthenticatedLayout>
+    );
+    const countrySelect = document.getElementById('country-select') as HTMLSelectElement;
+    await user.selectOptions(countrySelect, 'GH');
+    expect(setSidebarCountryKey).toHaveBeenCalledWith('GH');
+    await user.selectOptions(countrySelect, '');
+    expect(setSidebarCountryKey).toHaveBeenCalledWith(null);
+  });
+
+  it('DIOCESE_ADMIN sees Country and Diocese selectors when dioceses are loaded', () => {
+    (getStoredUser as jest.Mock).mockReturnValue({
+      username: 'dio',
+      displayName: 'Diocese Admin',
+      role: 'DIOCESE_ADMIN',
+    });
+    (useParish as jest.Mock).mockReturnValue({
+      ...defaultParishContext,
+      dioceses: [
+        { id: 1, dioceseName: 'One', countryCode: 'GH', parishes: [] },
+      ],
+    });
+    render(
+      <AuthenticatedLayout>
+        <p>Dashboard content</p>
+      </AuthenticatedLayout>
+    );
+    expect(document.getElementById('country-select')).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: /diocese/i })).toBeInTheDocument();
   });
 
   it('no-assigned-parish state: admin sees "No parish selected" and Add diocese link', () => {
