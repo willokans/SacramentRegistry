@@ -122,12 +122,10 @@ export default function AuthenticatedLayout({
         /* ignore malformed row */
       }
     }
-    const opts = [...byKey.entries()]
-      .map(([key, sample]) => ({
-        key,
-        label: countryFilterLabelForKey(key, sample),
-      }))
-      .sort((a, b) => {
+    const opts = Array.from(byKey.entries(), ([key, sample]) => ({
+      key,
+      label: countryFilterLabelForKey(key, sample),
+    })).sort((a, b) => {
         const byLabel = a.label.localeCompare(b.label, 'en', { sensitivity: 'base', numeric: true });
         if (byLabel !== 0) return byLabel;
         return a.key.localeCompare(b.key, 'en');

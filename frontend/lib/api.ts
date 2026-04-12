@@ -701,53 +701,52 @@ export interface DioceseWithParishesResponse {
  */
 export function normalizeDiocesesWithParishesPayload(raw: unknown): DioceseWithParishesResponse[] {
   if (!Array.isArray(raw)) return [];
-  return raw
-    .map((item: any) => {
-      const dioceseIdNum = Number(item?.id);
-      if (!Number.isFinite(dioceseIdNum) || dioceseIdNum <= 0) return null;
+  return raw.flatMap((item: any): DioceseWithParishesResponse[] => {
+    const dioceseIdNum = Number(item?.id);
+    if (!Number.isFinite(dioceseIdNum) || dioceseIdNum <= 0) return [];
 
-      const parishesRaw = Array.isArray(item?.parishes) ? item.parishes : [];
-      const parishes: ParishResponse[] = parishesRaw
-        .map((p: any) => {
-          const pid = Number(p?.id);
-          if (!Number.isFinite(pid) || pid <= 0) return null;
-          const fromPayload = Number(p?.dioceseId ?? p?.diocese_id);
-          const resolvedDioceseId =
-            Number.isFinite(fromPayload) && fromPayload > 0 ? fromPayload : dioceseIdNum;
-          const name = String(p?.parishName ?? p?.parish_name ?? '').trim();
-          return {
-            id: pid,
-            parishName: name || `Parish ${pid}`,
-            dioceseId: resolvedDioceseId,
-            description: typeof p?.description === 'string' ? p.description : undefined,
-            requireMarriageConfirmation:
-              p?.requireMarriageConfirmation ?? p?.require_marriage_confirmation ?? true,
-          } satisfies ParishResponse;
-        })
-        .filter((p): p is ParishResponse => p != null);
+    const parishesRaw = Array.isArray(item?.parishes) ? item.parishes : [];
+    const parishes: ParishResponse[] = parishesRaw
+      .map((p: any) => {
+        const pid = Number(p?.id);
+        if (!Number.isFinite(pid) || pid <= 0) return null;
+        const fromPayload = Number(p?.dioceseId ?? p?.diocese_id);
+        const resolvedDioceseId =
+          Number.isFinite(fromPayload) && fromPayload > 0 ? fromPayload : dioceseIdNum;
+        const name = String(p?.parishName ?? p?.parish_name ?? '').trim();
+        return {
+          id: pid,
+          parishName: name || `Parish ${pid}`,
+          dioceseId: resolvedDioceseId,
+          description: typeof p?.description === 'string' ? p.description : undefined,
+          requireMarriageConfirmation:
+            p?.requireMarriageConfirmation ?? p?.require_marriage_confirmation ?? true,
+        } satisfies ParishResponse;
+      })
+      .filter((p: ParishResponse | null): p is ParishResponse => p != null);
 
-      const dioceseName = String(item?.dioceseName ?? item?.diocese_name ?? '').trim();
-      return {
-        id: dioceseIdNum,
-        dioceseName: dioceseName || `Diocese ${dioceseIdNum}`,
-        code: typeof item?.code === 'string' ? item.code : undefined,
-        description: typeof item?.description === 'string' ? item.description : undefined,
-        countryCode:
-          typeof item?.countryCode === 'string'
-            ? item.countryCode
-            : typeof item?.country_code === 'string'
-              ? item.country_code
-              : undefined,
-        countryName:
-          typeof item?.countryName === 'string'
-            ? item.countryName
-            : typeof item?.country_name === 'string'
-              ? item.country_name
-              : undefined,
-        parishes,
-      } satisfies DioceseWithParishesResponse;
-    })
-    .filter((d): d is DioceseWithParishesResponse => d != null);
+    const dioceseName = String(item?.dioceseName ?? item?.diocese_name ?? '').trim();
+    const row: DioceseWithParishesResponse = {
+      id: dioceseIdNum,
+      dioceseName: dioceseName || `Diocese ${dioceseIdNum}`,
+      code: typeof item?.code === 'string' ? item.code : undefined,
+      description: typeof item?.description === 'string' ? item.description : undefined,
+      countryCode:
+        typeof item?.countryCode === 'string'
+          ? item.countryCode
+          : typeof item?.country_code === 'string'
+            ? item.country_code
+            : undefined,
+      countryName:
+        typeof item?.countryName === 'string'
+          ? item.countryName
+          : typeof item?.country_name === 'string'
+            ? item.country_name
+            : undefined,
+      parishes,
+    };
+    return [row];
+  });
 }
 
 /** Fetches all dioceses with their parishes in one request. Use for ParishContext to avoid N+1 round-trips. */
